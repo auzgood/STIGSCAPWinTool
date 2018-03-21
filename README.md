@@ -5,10 +5,10 @@ Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Secur
 ## HOW TO USE IT:
     Apply-STIGToolAdv.ps1	This is a more dynamic powershell script. This will detect roles, 
 				and features and even software and install the appropiate GPO backup.
-    Apply-SCAPTool.ps1	STILL DEVELOPING: This is the most advanced powershell script. This script is alot 
+    Apply-SCAPTool.ps1	STILL DEVELOPING: This is the most advanced powershell script. This script will be alot 
 				like linux's OpenSCAP, it will parse the XCCDF file from DISA and build a dataset
-				of all STIG components. Then one by one it will apply the STIG based on the configuration files.
-    Remove-STIGTool.ps1		This script just removes the the group policy folders and clear the security database.
+				of all STIG components and one by one it will apply the STIG based on the configuration files.
+    Remove-STIGTool.ps1	This script just removes the the group policy folders and clear the security database.
 						 
 ## REQUIREMENTS:		
  - To be compliant with latest STIGS, VM templates must be configured using UEFI, secureboot and virtualization (credguard) See screencaps in VM folder
