@@ -1,10 +1,7 @@
- WHAT IS IT: 	A Powershell script that will take a GPO backup or SCAP XCCDF file and generate stigs settings
+WHAT IS IT: 	A Powershell script that will take a GPO backup or SCAP XCCDF file and generate stigs settings
 		Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Security Compliance Manager Toolkit
 
 HOW TO USE IT:	There are a few methods:
-
-			Apply-STIGToolBasic.ps1	This is a basic powershell script that will parse GPO backups and apply them based
-						on hardcoded Operating Systems, features and roles
 
 			Apply-STIGToolAdv.ps1	IN-DEVELOPMENT. This is a more dynamic powershell script. This will detect roles, 
 						and features and even software and install the appropiate GPO backup.
@@ -16,17 +13,16 @@ HOW TO USE IT:	There are a few methods:
 			Remove-STIGTool.ps1 	IN-DEVELOPMENT. This script will take the lo
 						 
 REQUIREMENTS:		
-			To be compliant with latest STIGS, VM templates must be configured using UEFI, secureboot and virtualization (credguard)
-			See screencaps in VM folder
+			
+			To be compliant with latest STIGS, VM templates must be configured using UEFI, secureboot and virtualization (credguard) See screencaps in VM folder
 
 			Stig Naming convertions is required for STIG Tools. Follow README instructions in GPO folder		
 
 FOLDERS:
-			CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and 
-						description for each of the singular, actionable statements that comprise an IA control or IA best practice
 			
-			Configs\	   <-- Used with SCAPTool.ps1. Configuration files for each STIG ID. These are ini like files with commands for
-						validation and remedation steps.
+			CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and description for each of the singular, actionable statements that comprise an IA control or IA best practice
+			
+			Configs\	   <-- Used with SCAPTool.ps1. Configuration files for each STIG ID. These are ini like files with commands for validation and remedation steps.
 			
 			Extensions\	   <-- Used with SCAPTool.ps1. Powershell extension folder provides additional PowerShell functions
 
@@ -36,7 +32,7 @@ FOLDERS:
  
 			Logs\		   <-- Output logs for LGPO and advanced logging (Use CMTRACE)
 
-			SCAP\		   <-- SCAP Benchmark files. Follow [SCAP](SCAP/README.md) instructions in folder
+			SCAP\		   <-- SCAP Benchmark files. Follow README.md instructions in folder
 
 			Temp\		   <-- Store generated LGPO config and pol files
 
