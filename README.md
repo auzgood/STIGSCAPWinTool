@@ -1,5 +1,4 @@
-
-# Windows STIG & SCAP Toolkit 
+#e Windows STIG & SCAP Toolkit 
 
 ## WHAT IS IT: 	
 A Powershell script that will take a GPO backup or SCAP XCCDF file and generate stigs settings
@@ -14,9 +13,12 @@ Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Secur
     Remove-STIGTool.ps1	This script just removes the the group policy folders and clear the security database.
 						 
 ## REQUIREMENTS:		
- - Moduels need to be downladed. Follow [README.md](Modules/README.md) instructions in modules folder
+ - Modules need to be downladed. Follow [README.md](Modules/README.md) instructions in modules folder
  - Stig Naming convertions is required for STIG Tools. Follow [README.md](GPO/README.md)  instructions in GPO folder
- 
+ - CCI required for SCAP Tools. Follow [README.md](CCI/README.md)  instructions in CCI folder
+ - SCAP Benchmarks required for SCAP Tools. Follow [README.md](SCAP/README.md)  instructions in SCAP folder
+ - LGPO executable required for all tools. Follow [README.md](Tools/README.md)  instructions in Tools folder
+
 ## WHAT IT DOES: 	
    **Apply-STIGToolAdv.ps1**: The script will read into the GPO's backup.xml inside each GUID and identifiy the name of the policy. Using that information it will determine if the name matches identified system information, roles, features and install products and apply them locally using Microsoft's Security Compliance Manager tool LGPO. This ultimately read the GPO settings, and builds a file with all the registry and security settings, then applies those settings within the local gpo. These settings can then be viewed using the systems gpedit.msc. All keys and settings are backedup in the temp folder and logged in log folder. 
 
@@ -42,4 +44,3 @@ Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Secur
 - https://blogs.technet.microsoft.com/matt_hinsons_manageability_blog/2016/01/29/gpo-packs-in-mdt-2013-u1-for-windows-10/
 - https://www.microsoft.com/en-us/download/confirmation.aspx?id=55319
 - https://github.com/search?l=PowerShell&q=STIG&type=Repositories&utf8=%E2%9C%93
-
