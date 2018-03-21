@@ -36,7 +36,7 @@ FOLDERS:
  
 			Logs\		   <-- Output logs for LGPO and advanced logging (Use CMTRACE)
 
-			SCAP\		   <-- SCAP Benchmark files. Follow README instructions in folder
+			SCAP\		   <-- SCAP Benchmark files. Follow [SCAP](SCAP/README.md) instructions in folder
 
 			Temp\		   <-- Store generated LGPO config and pol files
 
