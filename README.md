@@ -14,8 +14,10 @@ Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Secur
 						 
 ## REQUIREMENTS:		
  - Moduels need to be downladed. Follow [README.md](Modules/README.md) instructions in modules folder
- - Stig Naming convertions is required for STIG Tools. Follow [README.md](GPO/README.md)  instructions in GPO folder		
-
+ - Stig Naming convertions is required for STIG Tools. Follow [README.md](GPO/README.md)  instructions in GPO folder
+ 
+## WHAT IT DOES: 	
+   **Apply-STIGToolAdv.ps1**: The script will read into the GPO's backup.xml inside each GUID and identifiy the name of the policy. Using that information it will determine if the name matches identified system information, roles, features and install products and apply them locally using Microsoft's Security Compliance Manager tool LGPO. This ultimately read the GPO settings, and builds a file with all the registry and security settings, then applies those settings within the local gpo. These settings can then be viewed using the systems gpedit.msc. All keys and settings are backuped in the log folder. 
 FOLDERS:
 			
     CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and description for each of the singular, actionable statements that comprise an IA control or IA best practice			
