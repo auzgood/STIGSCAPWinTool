@@ -1,4 +1,6 @@
-STILL## WHAT IS IT: 	
+# Windows STIG & SCAP Toolkit 
+
+## WHAT IS IT: 	
 A Powershell script that will take a GPO backup or SCAP XCCDF file and generate stigs settings
 Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Security Compliance Manager Toolkit
 
