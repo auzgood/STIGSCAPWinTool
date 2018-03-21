@@ -1,3 +1,5 @@
+WORK-IN-PROGRESS
+
 GOAL: The idea is to take each STIG rule and build configuration files (ini) with the appropriate actions for each rule. 
 There are over 270 items just for Server 2016 stig and each item would nne dot be created. 
 This will all easu maintaince and organization by the STIG version id (eg. WN16-00-000040.ini). 
