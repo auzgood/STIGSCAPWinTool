@@ -3,12 +3,12 @@ A Powershell script that will take a GPO backup or SCAP XCCDF file and generate 
 Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Security Compliance Manager Toolkit
 
 ## HOW TO USE IT:
-   Apply-STIGToolAdv.ps1	IN-DEVELOPMENT. This is a more dynamic powershell script. This will detect roles, 
-						and features and even software and install the appropiate GPO backup.
-   Apply-SCAPTool.ps1	IN-DEVELOPMENT. This is the most advanced powershell script. This script is alot 
-						like linux's OpenSCAP, it will parse the XCCDF file from DISA and build a dataset
-						of all STIG components. Then one by one it will apply the STIG based on the configuration files.
-   Remove-STIGTool.ps1 	IN-DEVELOPMENT. This script will take the lo
+    Apply-STIGToolAdv.ps1	This is a more dynamic powershell script. This will detect roles, 
+				and features and even software and install the appropiate GPO backup.
+    Apply-SCAPTool.ps1	 	This is the most advanced powershell script. This script is alot 
+				like linux's OpenSCAP, it will parse the XCCDF file from DISA and build a dataset
+				of all STIG components. Then one by one it will apply the STIG based on the configuration files.
+    Remove-STIGTool.ps1 	This script just removes the the group policy folders and clear the security database.
 						 
 ## REQUIREMENTS:		
  - To be compliant with latest STIGS, VM templates must be configured using UEFI, secureboot and virtualization (credguard) See screencaps in VM folder
@@ -16,25 +16,16 @@ Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Secur
 
 FOLDERS:
 			
-			CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and description for each of the singular, actionable statements that comprise an IA control or IA best practice
-			
-			Configs\	   <-- Used with SCAPTool.ps1. Configuration files for each STIG ID. These are ini like files with commands for validation and remedation steps.
-			
-			Extensions\	   <-- Used with SCAPTool.ps1. Powershell extension folder provides additional PowerShell functions
+    CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and description for each of the singular, actionable statements that comprise an IA control or IA best practice			
+    Configs\	   <-- Used with SCAPTool.ps1. Configuration files for each STIG ID. These are ini like files with commands for validation and remedation steps.			
+    Extensions\	   <-- Used with SCAPTool.ps1. Powershell extension folder provides additional PowerShell functions
+    Modules\	   <-- Additional powershell modules found in PowerShell Gallery and elsewhere
+    GPO\		   <-- Used with STIGToolBasic.ps1 and STIGToolAdv.ps1. Follow README instructions in folder
+    Logs\		   <-- Output logs for LGPO and advanced logging (Use CMTRACE)
+    SCAP\		   <-- SCAP Benchmark files. Follow README.md instructions in folder
+    Temp\		   <-- Store generated LGPO config and pol files
+    Tools\		   <-- Tools used in scripts, such as LGPO 
 
-			Modules\	   <-- Additional powershell modules found in PowerShell Gallery and elsewhere
-
-			GPO\		   <-- Used with STIGToolBasic.ps1 and STIGToolAdv.ps1. Follow README instructions in folder
- 
-			Logs\		   <-- Output logs for LGPO and advanced logging (Use CMTRACE)
-
-			SCAP\		   <-- SCAP Benchmark files. Follow README.md instructions in folder
-
-			Temp\		   <-- Store generated LGPO config and pol files
-
-			Tools\		   <-- Tools used in scripts, such as LGPO 
-
-			VM\		   <-- Screenshots fo VM settings
 
 ## SOURCES:		
 - https://github.com/CyberSecDef/STIG
