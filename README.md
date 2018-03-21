@@ -13,8 +13,8 @@ Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Secur
     Remove-STIGTool.ps1	This script just removes the the group policy folders and clear the security database.
 						 
 ## REQUIREMENTS:		
- - To be compliant with latest STIGS, VM templates must be configured using UEFI, secureboot and virtualization (credguard) See screencaps in VM folder
- - Stig Naming convertions is required for STIG Tools. Follow README instructions in GPO folder		
+ - Moduels need to be downladed. Follow [README.md](Modules/README.md) instructions in modules folder
+ - Stig Naming convertions is required for STIG Tools. Follow [README.md](GPO/README.md)  instructions in GPO folder		
 
 FOLDERS:
 			
