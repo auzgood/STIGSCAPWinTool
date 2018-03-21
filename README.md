@@ -1,3 +1,4 @@
+
 # Windows STIG & SCAP Toolkit 
 
 ## WHAT IS IT: 	
@@ -18,7 +19,8 @@ Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Secur
  
 ## WHAT IT DOES: 	
    **Apply-STIGToolAdv.ps1**: The script will read into the GPO's backup.xml inside each GUID and identifiy the name of the policy. Using that information it will determine if the name matches identified system information, roles, features and install products and apply them locally using Microsoft's Security Compliance Manager tool LGPO. This ultimately read the GPO settings, and builds a file with all the registry and security settings, then applies those settings within the local gpo. These settings can then be viewed using the systems gpedit.msc. All keys and settings are backuped in the log folder. 
-FOLDERS:
+
+## FOLDERS:
 			
     CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and description for each of the singular, actionable statements that comprise an IA control or IA best practice			
     Configs\	   <-- Used with SCAPTool.ps1. Configuration files for each STIG ID. These are ini like files with commands for validation and remedation steps.			
