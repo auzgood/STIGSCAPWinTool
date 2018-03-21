@@ -1,15 +1,11 @@
-WHAT TO DO:		Drop All GPO Backups here or download GPO from DISA (https://iase.disa.mil/stigs/gpo/Pages/index.aspx)
-HOW:			Open Group Policy Management console with domain rights, and expand forest-->Domains-->[domain name]-->Group Policy Objects
-				Right click Group Policy Objects-->Back Up all. Browse to a folder and give a description. Click Backup. Note any that failed. 
-				The backup folder will have many GUID folders. Leave as is. Copy them to this folder
-REQUIREMENTS:	GPO names within GroupPolicy Manager must be named appropiately. See Naming Convention section below
-WHAT IT DOES: 	The script will read into the GPO's backup.xml inside each GUID and identifiy the name of the policy. 
-				Using that information it will determine if the name matches identified system information, roles, features and install products
-				and apply them locally using Microsoft's Security Compliance Manager tool LGPO. This ultimately read the GPO settings, and builds
-				a file with all the registry and security settings, then applies those settings within the local gpo. These settings can then be
-				viewed using the systems gpedit.msc. All keys and settings are backuped in the log folder. 
+## WHAT TO DO:		
+Drop All GPO Backups here or download GPO from DISA (https://iase.disa.mil/stigs/gpo/Pages/index.aspx)
+## HOW:			
+Open Group Policy Management console with domain rights, and expand forest-->Domains-->[domain name]-->Group Policy Objects. Right click Group Policy Objects-->Back Up all. Browse to a folder and give a description. Click Backup. Note any that failed. The backup folder will have many GUID folders. Leave as is. Copy them to this folder
+## REQUIREMENTS:	
+GPO names within GroupPolicy Manager must be named appropiately. See Naming Convention section below
 
-NAMING CONVENTION:
+## NAMING CONVENTION:
 Backup folder structure does not matter. 
 
 GPO names should be labeled to identify what its targeting. Follow these GPO naming guidelines:
