@@ -1,6 +1,8 @@
-WORK-IN-PROGRESS: I need help creating all the configuration files for each STIG item. 
+## WORK-IN-PROGRESS: 
+I need help creating all the configuration files for each STIG item. 
 
-GOAL: The idea is to take each STIG rule and build configuration files (ini) with the appropriate actions for each rule. 
+# GOAL: 
+The idea is to take each STIG rule and build configuration files (ini) with the appropriate actions for each rule. 
 There are over 270 items just for Server 2016 stig and each item would have to be created. 
 This will would allow easy maintaince and organization in named by the STIG version id (eg. WN16-00-000040.ini). 
 
@@ -44,6 +46,7 @@ WN16-00-000040.ini:
     LGPO=IsInstalled
     LGPO=DWORD:1
 
+# Breakdown INI file
 Ignore and starting semicolon for the commented section. Parse the Validate section and if ignore is set to false, turn ScriptBlock key values into one Powershell ScriptBlock; the example should run like this within the calling Powershell parser 
 
     $scriptBlock = {
