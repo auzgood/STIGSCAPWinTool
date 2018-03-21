@@ -1,7 +1,8 @@
-WHAT IS IT: 	A Powershell script that will take a GPO backup or SCAP XCCDF file and generate stigs settings
+ WHAT IS IT: 	A Powershell script that will take a GPO backup or SCAP XCCDF file and generate stigs settings
 		Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Security Compliance Manager Toolkit
 
-HOW TO USE IT:	There are a few methods: 
+HOW TO USE IT:	There are a few methods:
+
 			Apply-STIGToolBasic.ps1	This is a basic powershell script that will parse GPO backups and apply them based
 						on hardcoded Operating Systems, features and roles
 
@@ -14,15 +15,19 @@ HOW TO USE IT:	There are a few methods:
 
 			Remove-STIGTool.ps1 	IN-DEVELOPMENT. This script will take the lo
 						 
-REQUIREMENTS:		To be compliant with latest STIGS, VM templates must be configured using UEFI, secureboot and virtualization (credguard)
+REQUIREMENTS:		
+			To be compliant with latest STIGS, VM templates must be configured using UEFI, secureboot and virtualization (credguard)
 			See screencaps in VM folder
 
 			Stig Naming convertions is required for STIG Tools. Follow README instructions in GPO folder		
 
-FOLDERS:		CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and 
+FOLDERS:
+			CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and 
 						description for each of the singular, actionable statements that comprise an IA control or IA best practice
+			
 			Configs\	   <-- Used with SCAPTool.ps1. Configuration files for each STIG ID. These are ini like files with commands for
 						validation and remedation steps.
+			
 			Extensions\	   <-- Used with SCAPTool.ps1. Powershell extension folder provides additional PowerShell functions
 
 			Modules\	   <-- Additional powershell modules found in PowerShell Gallery and elsewhere
@@ -39,12 +44,14 @@ FOLDERS:		CCI\U_CCI_List.xml <-- Used with SCAPTool.ps1. Control Correlation Ide
 
 			VM\		   <-- Screenshots fo VM settings
 
-SOURCES:		https://github.com/CyberSecDef/STIG
-			http://www.entelechyit.com/2017/01/02/powershell-and-disa-nist-stigs-part-1/
-			http://iase.disa.mil/stigs/compilations/Pages/index.aspx
-			https://www.powershellgallery.com/profiles/michael.haken/
-			https://github.com/alulsh/SharePoint-2013-STIGs
-			https://blogs.technet.microsoft.com/matt_hinsons_manageability_blog/2016/01/29/gpo-packs-in-mdt-2013-u1-for-windows-10/
-			https://www.microsoft.com/en-us/download/confirmation.aspx?id=55319
-			https://github.com/search?l=PowerShell&q=STIG&type=Repositories&utf8=%E2%9C%93
+SOURCES:		
+
+	https://github.com/CyberSecDef/STIG
+	http://www.entelechyit.com/2017/01/02/powershell-and-disa-nist-stigs-part-1/
+	http://iase.disa.mil/stigs/compilations/Pages/index.aspx
+	https://www.powershellgallery.com/profiles/michael.haken/
+	https://github.com/alulsh/SharePoint-2013-STIGs
+	https://blogs.technet.microsoft.com/matt_hinsons_manageability_blog/2016/01/29/gpo-packs-in-mdt-2013-u1-for-windows-10/
+	https://www.microsoft.com/en-us/download/confirmation.aspx?id=55319
+	https://github.com/search?l=PowerShell&q=STIG&type=Repositories&utf8=%E2%9C%93
 
