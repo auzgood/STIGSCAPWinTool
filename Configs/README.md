@@ -8,7 +8,7 @@ This will would allow easy maintaince and organization in named by the STIG vers
 
 PowerShell will parse the file then translate it into a ScriptBlock
 
-Here is an example:
+## Example:
 
     STIG SV-87877r1_rule with ID of WN16-00-000040 says the ESC must be enabled for admins on Windows Servers. 
 
