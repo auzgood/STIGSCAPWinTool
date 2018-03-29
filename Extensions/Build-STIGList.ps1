@@ -1,30 +1,3 @@
-#------------------ Function ----------------------
-Function Map-GUIDsToGPOName{
-                    param(
-    [parameter(Mandatory=$true)]
-    [String]
-    $rootdir
-    )
-
-    $GPOCollecton = @()
-    $BackupFolders = Get-ChildItem -Recurse -Include backup.xml -Path $rootdir 
-    ForEach ($Folder in $BackupFolders){
-        $guid = $Folder.Directory.Name
-        $x = [xml](Get-Content -Path $Folder)
-        $dn = $x.GroupPolicyBackupScheme.GroupPolicyObject.GroupPolicyCoreSettings.DisplayName.InnerText
-        #$results.Add($dn, $guid)
-
-        $GPO = New-Object -TypeName PSObject -Property ([ordered]@{
-            Name    = "$dn"
-            GUID    = "$guid"
-            Path    = $Folder.DirectoryName
-        })
-        $GPOCollecton += $GPO
-    }# close foreach
-    
-    $GPOCollecton
-}
-
 Function Check-WindowsDefender {
 <#
     .SYNOPSIS
