@@ -110,8 +110,10 @@ foreach($module in $modules){
 ##*===============================================
 ##* MAIN ROUTINE
 ##*===============================================
+Start-Log "$workingLogPath\$scriptName.log"
+
 if (!(Test-IsAdmin -CheckOnly)){
-    Write-Warning "You are not currently running this under an Administrator account! `nThis script requires to be ran as a priviledge Administrator account."  
+    Write-Log -Message "You are not currently running this under an Administrator account! `nThis script requires to be ran as a priviledge Administrator account." -CustomComponent "Priviledged Administrator" -ColorLevel 6 -NewLine -HostMsg 
     Exit -1
 }
 
@@ -170,15 +172,15 @@ $envOSSimpleNames = "$envOSSimpleName|$envOSShort|$envOSShorter|$envOSShortest"
 
 #grab all policies in GPO folder and build a collection array
 $GPOs = @()
-Write-Host "Building GPO list, this can take a while...." -ForegroundColor Green
-$BackupFolders = Get-ChildItem -Recurse -Include backup.xml -Path $BackupGPOPath -ErrorAction SilentlyContinue | %{Write-Host Examining file: $_.fullname; $_}
+Write-Log -Message "Building GPO list, this can take a while...." -CustomComponent "Parsing Policies" -ColorLevel 5 -NewLine Before -HostMsg
+$BackupFolders = Get-ChildItem -Recurse -Include backup.xml -Path $BackupGPOPath -ErrorAction SilentlyContinue | %{Write-Log -Message "Found Policies: $($_.fullname)" -CustomComponent "Parsing Policies" -ColorLevel 1 -HostMsg;$_}
 #$BackupFolders = Get-ChildItem -Recurse -Include backup.xml -Path $BackupGPOPath -ErrorAction SilentlyContinue
 
 $FoundPolicies = $BackupFolders.Count
-Write-Host "Found $FoundPolicies GPO policies..." -ForegroundColor Cyan
-Write-Host "  Parsing Policies for [$($envOSSimpleNames.Replace('|',','))] in the name..." -ForegroundColor DarkCyan
-Write-Host "  Parsing Policies for [$($envOSRoleTypeName.Replace('|',' or '))] in the name..." -ForegroundColor DarkCyan
-Write-Host "  Parsing Policies for [$($additionalFeatureNames.Replace('|',','))] in the name..." -ForegroundColor DarkCyan
+Write-Log -Message "Found $FoundPolicies GPO policies..." -CustomComponent "Parsing Policies" -ColorLevel 4 -NewLine Before -HostMsg 
+Write-Log -Message "  Parsing Policies for [$($envOSSimpleNames.Replace('|',','))] in the name..." -CustomComponent "Filtering Policies" -ColorLevel 1 -HostMsg 
+Write-Log -Message "  Parsing Policies for [$($envOSRoleTypeName.Replace('|',' or '))] in the name..." -CustomComponent "Filtering Policies" -ColorLevel 1 -HostMsg 
+Write-Log -Message "  Parsing Policies for [$($additionalFeatureNames.Replace('|',','))] in the name..." -CustomComponent "Filtering Policies" -ColorLevel 1 -HostMsg  
 
 $RunCount = 0
 $IgnoreCount = 0
@@ -211,8 +213,9 @@ ForEach ($Folder in $BackupFolders){
     $GPOs += $GPOTable
     $progress++ 
 }# close foreach
-Write-Host "  $IgnoreCount policies are being filtered" -ForegroundColor DarkMagenta
-Write-Host "  $RunCount policies will be applied to local system" -ForegroundColor DarkMagenta
+
+Write-Log -Message "  $IgnoreCount policies are being filtered" -CustomComponent "Filtering Policies" -ColorLevel 9 -NewLine Before -HostMsg
+Write-Log -Message "  $RunCount policies will be applied to local system" -CustomComponent "Applying Policies" -ColorLevel 9 -NewLine None -HostMsg 
 #Start-Sleep 30
     
 #$GPOCollecton
@@ -240,7 +243,7 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
         $AuditCsvPath = $GPO.Path + "\DomainSysvol\GPO\Machine\microsoft\windows nt\Audit\Audit.csv"
         $xmlRegPrefPath = $GPO.Path + "\DomainSysvol\GPO\Machine\Preferences\Registry\Registry.xml"
         
-        Write-Host "Applying [$($GPO.name)] $orderLabel..." -ForegroundColor Yellow
+        Write-Log -Message "Applying [$($GPO.name)] $orderLabel..." -CustomComponent "Applying Policies" -ColorLevel 2 -NewLine None -HostMsg 
 
         $env:SEE_MASK_NOZONECHECKS = 1
         If(Test-Path $GptTmplPath){
@@ -284,15 +287,17 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
             Start-Process AUDITPOL.EXE -ArgumentList "/restore /file:""$AuditCsvPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).auditpol.stdout" -Wait -NoNewWindow
         }
 
-        Write-Host "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -ForegroundColor Gray
-        Try{
-            #Start-Process "$env:windir\system32\cscript.exe" -ArgumentList "//NOLOGO ""$ToolsPath\LocalGPO\LocalGPO.wsf"" /Path:""$($GPO.Path)"" /Validate /NoOverwrite" -RedirectStandardOutput "$workingTempPath\$($GPO.name).gpo.log" -Wait -NoNewWindow
-            Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/q /v /g ""$($GPO.Path)""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).allgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).allgpo.stderr" -Wait -NoNewWindow
-            $appliedPolicies ++
-        }
-        Catch{
-            Write-Host "Unable to Apply [$($GPO.name)] policy, see [$workingTempPath\$($GPO.name)_lgpo.stderr] for details" -ForegroundColor Yellow
-            $errorPolicies ++
+        If(Test-Path "$ToolsPath\LGPO.exe"){
+            Write-Host "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -ForegroundColor Gray
+            Try{
+                #Start-Process "$env:windir\system32\cscript.exe" -ArgumentList "//NOLOGO ""$ToolsPath\LocalGPO\LocalGPO.wsf"" /Path:""$($GPO.Path)"" /Validate /NoOverwrite" -RedirectStandardOutput "$workingTempPath\$($GPO.name).gpo.log" -Wait -NoNewWindow
+                Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/q /v /g ""$($GPO.Path)""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).allgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).allgpo.stderr" -Wait -NoNewWindow
+                $appliedPolicies ++
+            }
+            Catch{
+                Write-Host "Unable to Apply [$($GPO.name)] policy, see [$workingTempPath\$($GPO.name)_lgpo.stderr] for details" -ForegroundColor Yellow
+                $errorPolicies ++
+            }
         }
         $env:SEE_MASK_NOZONECHECKS = 0
         

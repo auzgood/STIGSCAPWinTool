@@ -21,53 +21,85 @@ Function Start-Log{
     }
 }
 
-Function Write-Log{
-    PARAM(
+Function Write-Log {
+    param (
         [Parameter(Mandatory = $true)]
-        [String]$Message,
-        [string]$Component,
-        [Parameter()]
-        [ValidateSet(1, 2, 3)]
-        [int]$Severity = 1,
-        [switch]$OutputHost = $false,
-        [string]$OutputHostColor
-    )
-    Begin{
-        $TimeGenerated = "$(Get-Date -Format HH:mm:ss).$((Get-Date).Millisecond)+000"
-        $Line = '<![LOG[{0}]LOG]!><time="{1}" date="{2}" component="{3}" context="" type="{4}" thread="" file="">'
-        If ($Component){
-            $LineFormat = $Message, $TimeGenerated, (Get-Date -Format MM-dd-yyyy), "$Component".toupper().Replace(" ","_"), $Severity
-        }
-        Else{
-            $LineFormat = $Message, $TimeGenerated, (Get-Date -Format MM-dd-yyyy), "$($MyInvocation.ScriptName | Split-Path -Leaf):$($MyInvocation.ScriptLineNumber)", $Severity
-        }
-        $Line = $Line -f $LineFormat
+        [string]$Message,
+        
+        [string]$CustomComponent,
 
-        If ($OutputHost){
-            If ($OutputHostColor){
-                $Color = $OutputHostColor
-            }
-            Else{
-                Switch ($Severity) {
-				    3 { $Color = "Red" }
-				    2 { $Color = "Yellow" }
-				    1 { $Color = "White" }
-			    }
-            }
-            #$OutputBoxMessage = $($OutputBoxMessage).replace("[","(").replace("]",")")
-            Write-Host "`n$($Message)" -ForegroundColor $Color
-        }
+        [Parameter()]
+        [ValidateSet(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)]
+        [int]$ColorLevel = 1,
+        [switch]$HostMsg,
+
+        [ValidateSet("None","Before","After","Both")]
+        [string]$NewLine
+
+    )
+
+    Begin{
+        #set log level based on colorlevel integer
+        Switch ($ColorLevel)
+            {
+                0 {$LogLevel = 1}
+                1 {$LogLevel = 1}
+                2 {$LogLevel = 2}
+                3 {$LogLevel = 3}
+                4 {$LogLevel = 1}
+                5 {$LogLevel = 1}
+                6 {$LogLevel = 2}
+                7 {$LogLevel = 3}
+                8 {$LogLevel = 1}
+                9 {$LogLevel = 1}
+                default {$LogLevel = 1}
+            }
     }
     Process{
-        Try{
-        Add-Content -Value $Line -Path $global:ScriptLogFilePath
+        $TimeGenerated = "$(Get-Date -Format HH:mm:ss).$((Get-Date).Millisecond)+000"
+        $Line = '<![LOG[{0}]LOG]!><time="{1}" date="{2}" component="{3}" context="" type="{4}" thread="" file="">'
+        If ($CustomComponent){
+            $LineFormat = $Message, $TimeGenerated, (Get-Date -Format MM-dd-yyyy), "$CustomComponent".toupper().Replace(" ","_"), $LogLevel
         }
-        Catch{
-            Write-Error $_.Exception.Message
-            Exit
+        Else{
+            $LineFormat = $Message, $TimeGenerated, (Get-Date -Format MM-dd-yyyy), "$($MyInvocation.ScriptName | Split-Path -Leaf):$($MyInvocation.ScriptLineNumber)", $LogLevel
+        }
+        $Line = $Line -f $LineFormat
+        Add-Content -Value $Line -Path $ScriptLogFilePath -ErrorAction SilentlyContinue
+    }
+    End{
+       If ($HostMsg){
+            If($NewLine){
+                Switch($NewLine){
+                    "Before" {$FullMessage = "`n" + $Message}
+                    "After"  {$FullMessage = $Message + "`n"}
+                    "Both"   {$FullMessage = "`n" + $Message + "`n"}
+                    "None"   {$FullMessage = $Message}
+                    default  {$FullMessage = $Message}
+                }
+            }
+            Else{
+                $FullMessage = $Message
+            }
+        
+            Switch ($ColorLevel)
+            {
+                0 {Write-Host $FullMessage -ForegroundColor White}
+                1 {Write-Host $FullMessage -ForegroundColor Gray}
+                2 {Write-Host $FullMessage -ForegroundColor Yellow}
+                3 {Write-Host $FullMessage -ForegroundColor Red}
+                4 {Write-Host $FullMessage -ForegroundColor Cyan}
+                5 {Write-Host $FullMessage -ForegroundColor Green}
+                6 {Write-Warning $Message}
+                7 {Write-Error $Message}
+                8 {Write-Host $FullMessage -ForegroundColor DarkYellow}
+                9 {Write-Host $FullMessage -ForegroundColor Magenta}
+                default {Write-Host $FullMessage}
+            }
         }
     }
 }
+
 ##*============
 function Get-ListContent{
     <#
@@ -575,4 +607,644 @@ Function Call-IniContent{
         }
     }
 
+}
+
+
+Function Check-WindowsDefender {
+<#
+    .SYNOPSIS
+
+    .DESCRIPTION
+
+    .PARAMETER $return
+        
+    .EXAMPLE
+
+    .SOURCE https://gallery.technet.microsoft.com/scriptcenter/PowerShell-to-Check-if-811b83bc
+
+    #>
+    param(
+        [switch]
+        $return
+        )
+
+    Try { 
+        $defenderOptions = Get-MpComputerStatus 
+        if([string]::IsNullOrEmpty($defenderOptions)) { 
+            If(!$return){Write-host "Windows Defender was not found running on the Server:" $env:computername -foregroundcolor "Green"}
+        } 
+        else { 
+            If(!$return){
+                Write-host "Windows Defender was found on the Server:" $env:computername -foregroundcolor "Cyan" 
+                Write-host "   Is Windows Defender Enabled?" $defenderOptions.AntivirusEnabled 
+                Write-host "   Is Windows Defender Service Enabled?" $defenderOptions.AMServiceEnabled 
+                Write-host "   Is Windows Defender Antispyware Enabled?" $defenderOptions.AntispywareEnabled 
+                Write-host "   Is Windows Defender OnAccessProtection Enabled?"$defenderOptions.OnAccessProtectionEnabled 
+                Write-host "   Is Windows Defender RealTimeProtection Enabled?"$defenderOptions.RealTimeProtectionEnabled
+            }
+            Else{
+                If ( 
+                ($defenderOptions.AntivirusEnabled) -or 
+                ($defenderOptions.AMServiceEnabled) -or 
+                ($defenderOptions.AntispywareEnabled) -or 
+                ($defenderOptions.OnAccessProtectionEnabled) -or 
+                ($defenderOptions.RealTimeProtectionEnabled) 
+                ){return $true}
+            }
+        } 
+    } 
+    Catch 
+    { 
+        If(!$return){Write-host "Windows Defender was not found running on the Server:" $env:computername -foregroundcolor "Green"}
+        Else{return $false}
+    }
+}
+
+
+Function Check-FirewallState{
+    $Compliance = 'Non-Compliant'
+    $CheckDomain = Get-NetFirewallProfile | Where-Object {$_.Name -eq 'Domain' -and $_.Enabled -eq 'True'}
+    $CheckPublic = Get-NetFirewallProfile | Where-Object {$_.Name -eq 'Public' -and $_.Enabled -eq 'True'}
+    $CheckPrivate = Get-NetFirewallProfile | Where-Object {$_.Name -eq 'Private' -and $_.Enabled -eq 'True'}
+    if ( ($CheckDomain) -and ($CheckPublic) -and ($CheckPrivate) ) {$Compliance = 'Compliant'}
+    $Compliance
+}
+
+Function Get-BitlockerStatus{
+<#
+    .SOURCE https://blogs.technet.microsoft.com/heyscriptingguy/2015/05/26/powershell-and-bitlocker-part-2/
+    #>
+    $ProtectionState = Get-WmiObject -Namespace ROOT\CIMV2\Security\Microsoftvolumeencryption -Class Win32_encryptablevolume -Filter "DriveLetter = '$env:SystemDrive'" -ErrorAction SilentlyContinue
+    If($ProtectionState){
+            switch ($ProtectionState.GetProtectionStatus().protectionStatus){
+                ("0"){$return = "Unprotected"}
+                ("1"){$return = "Protected"}
+                ("2"){$return = "Uknowned"}
+                default {$return = "NoReturn"}
+            }
+    }
+    Else{
+        $return = "Disabled"
+    }
+    return $return
+}
+
+Function Get-CredGuardStatus{
+<#
+    .SOURCE https://blogs.technet.microsoft.com/poshchap/2016/09/23/security-focus-check-credential-guard-status-with-powershell/
+    #>
+    $DevGuard = Get-CimInstance –ClassName Win32_DeviceGuard –Namespace root\Microsoft\Windows\DeviceGuard
+    #if ($DevGuard.SecurityServicesConfigured -contains 1) {"Credential Guard configured"}
+    #if ($DevGuard.SecurityServicesRunning -contains 1) {"Credential Guard running"}
+    if ( ($DevGuard.SecurityServicesConfigured -contains 1) ) {return 'Enabled'}
+    Else{return 'Disabled'}
+
+}
+
+Function Get-IISVersion{
+    $IISversion = (Get-ItemProperty HKLM:\SOFTWARE\Microsoft\InetStp\ -ErrorAction SilentlyContinue).MajorVersion
+    $IISrunning = Get-WmiObject Win32_Service -Filter "name='W3SVC'"
+    if($IISrunning.State -eq "Running"){return $IISversion}
+}
+
+
+Function Check-HyperVStatus ($OSRole){
+    # Get the Hyper-V feature and store it in $hyperv
+    if (Test-IsAdmin -CheckOnly){
+        Switch ($OSRole) {
+	        3 { $hyperv = (Get-WindowsFeature -Name Hyper-V -ErrorAction SilentlyContinue).Installed
+                }
+	        2 { $hyperv = (Get-WindowsFeature -Name Hyper-V -ErrorAction SilentlyContinue).Installed
+                }
+	        1 { $hyperv = Get-WindowsOptionalFeature -FeatureName Microsoft-Hyper-V-All -Online -ErrorAction SilentlyContinue
+                }
+	        Default { }
+        }
+
+        If($hyperv){
+            # Check if Hyper-V is already enabled.
+            if($hyperv.State -eq "Enabled") {
+                $state = 'Enabled'
+            } else {
+                $state = 'Disabled'
+            }
+        } else {
+                $state = 'Not Installed'
+        }
+        return $state
+    }
+    Else{
+        return 
+    }
+}
+
+
+Function Check-SharepointVersion{
+    # https://blogs.technet.microsoft.com/stefan_gossner/2015/04/20/powershell-script-to-display-version-info-for-installed-sharepoint-product-and-language-packs/
+
+    Param(
+      # decide on whether all the sub-components belonging to the product should be shown as well
+      [switch]$ShowComponents
+    )
+
+    # location in registry to get info about installed software
+
+    $RegLoc = Get-ChildItem HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall
+
+    # Get SharePoint Products and language packs
+    $Programs = $RegLoc | 
+	    where-object { $_.PsPath -like "*\Office*" } | 
+	    foreach {Get-ItemProperty $_.PsPath} 
+    $Components = $RegLoc | 
+	    where-object { $_.PsPath -like "*1000-0000000FF1CE}" } | 
+	    foreach {Get-ItemProperty $_.PsPath} 
+
+    # output either just the info about Products and Language Packs
+    # or also for sub components
+
+    if ($ShowComponents.IsPresent)
+    {
+	    $Programs | foreach { 
+		    $_ | fl  DisplayName, DisplayVersion; 
+
+		    $productCodes = $_.ProductCodes;
+		    $Comp = @() + ($Components | 
+			    where-object { $_.PSChildName -in $productCodes } | 
+			    foreach {Get-ItemProperty $_.PsPath});
+		    $Comp | Sort-Object DisplayName | ft DisplayName, DisplayVersion -Autosize
+	    }
+    }
+    else
+    {
+	    $Programs | fl DisplayName, DisplayVersion
+    }
+    Return $Programs
+}
+
+
+Function Check-SQLVersion{
+    $server = $env:COMPUTERNAME
+    try {
+        # Define SQL instance registry keys
+        $type = [Microsoft.Win32.RegistryHive]::LocalMachine;
+        $regconnection = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey($type, $server) ;
+        $instancekey = "SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL";
+ 
+        try {
+            # Open SQL instance registry key
+            $openinstancekey = $regconnection.opensubkey($instancekey);
+        }
+        catch { $out = $server + ",No SQL registry keys found"; }
+ 
+        # Get installed SQL instance names
+        $instances = $openinstancekey.getvaluenames();
+ 
+        # Loop through each instance found
+        foreach ($instance in $instances) {
+ 
+            # Define SQL setup registry keys
+            $instancename = $openinstancekey.getvalue($instance);
+            $instancesetupkey = "SOFTWARE\Microsoft\Microsoft SQL Server\" + $instancename + "\Setup"; 
+ 
+            # Open SQL setup registry key
+            $openinstancesetupkey = $regconnection.opensubkey($instancesetupkey);
+ 
+            $edition = $openinstancesetupkey.getvalue("Edition")
+ 
+            # Get version and convert to readable text
+            $version = $openinstancesetupkey.getvalue("Version");
+ 
+            switch -wildcard ($version) {
+                "13*" {$versionname = "SQL Server 2016";}
+                "12*" {$versionname = "SQL Server 2014";}
+                "11*" {$versionname = "SQL Server 2012";}
+                "10.5*" {$versionname = "SQL Server 2008 R2";}
+                "10.4*" {$versionname = "SQL Server 2008";}
+                "10.3*" {$versionname = "SQL Server 2008";}
+                "10.2*" {$versionname = "SQL Server 2008";}
+                "10.1*" {$versionname = "SQL Server 2008";}
+                "10.0*" {$versionname = "SQL Server 2008";}
+                default {$versionname = $version;}
+            }
+
+            # Output results to CSV
+            $out =  $server + "," + $instancename + "," + $edition + "," + $versionname; 
+            return $versionname
+        }
+ 
+    }
+    catch { $out = $server + ",Could not open registry"; }  
+
+}
+
+Function Check-MBAMInstalled{
+    if (-not (Test-Path variable:local:MbamWmiNamespace))
+    {
+        Try{
+            Set-Variable MbamWmiNamespace -Option ReadOnly -Scope local "root\Microsoft\MBAM"
+            return "Installed"
+        }
+        Catch{
+            return "Not Installed"
+        }
+    }
+
+}
+
+Function Get-OfficeVersion{
+    $version = 0
+    $reg = [Microsoft.Win32.RegistryKey]::OpenRemoteBaseKey('LocalMachine', $env:COMPUTERNAME)
+    $reg.OpenSubKey('software\Microsoft\Office').GetSubKeyNames() |% {
+        if ($_ -match '(\d+)\.') {
+            if ([int]$matches[1] -gt $version) {
+                $version = $matches[1]
+            }
+        }
+    }
+    switch($version){
+        16 {return "Office 2016"}
+        15 {return "Office 2013"}
+        14 {return "Office 2010"}
+        default {return}
+    }
+
+}
+
+
+Function Get-UserToSid{
+    [CmdletBinding()]
+    param(
+        [parameter(
+        Mandatory=$true, 
+        Position=0,
+        ParameterSetName="Domain")]
+        [string] $Domain,
+
+        [parameter(
+        Mandatory=$true, 
+        Position=1,
+        ParameterSetName="Domain"
+                    )]
+        [string] $User,
+
+        [parameter(
+        Mandatory=$true, 
+        Position=0,
+        ParameterSetName="Local",
+        ValueFromPipeline= $true
+                    )]
+        [string] $LocalAccount
+    )
+    
+    #Determine which parameter set was used
+    switch ($PsCmdlet.ParameterSetName){
+        "Local"   {$objUser = New-Object System.Security.Principal.NTAccount("$LocalAccount")}
+        "Domain"  {$objUser = New-Object System.Security.Principal.NTAccount("$Domain", "$user")}
+    }
+
+    $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier]) 
+    $strSID.Value
+}
+
+
+Function Sid-toUser($sidString)
+{
+ $sid = new-object System.Security.Principal.SecurityIdentifier($sidString)
+ $user = $sid.Translate([System.Security.Principal.NTAccount])
+ $user.value
+}
+
+Function Build-STIGFeatureList{
+    #BUILD LIST FOR:
+    #-------------------- START: ROLES AND FEATURES --------------------#
+    #Detection for Workstation and ServerFeature STIGs
+    $arrayFeatureNames = @()
+
+    # Always check these:
+    $arrayFeatureNames += "Default" #<-- Default domain controller policy
+    $arrayFeatureNames += "PowerShell"
+    $arrayFeatureNames += "Applocker"
+
+    If(Check-WindowsDefender -return){$arrayFeatureNames += "Defender"}
+    If(Check-FirewallState -eq 'Compliant'){$arrayFeatureNames += "Firewall"}
+    If(Get-CredGuardStatus -eq 'Enabled'){
+        $arrayFeatureNames += "Credential Guard","Cred Guard","Device Guard"}
+    If(Check-MBAMInstalled -eq 'Installed'){$arrayFeatureNames += "MBAM"}
+
+    #dynamically add IE if installed to array
+    [version]$IEVersion = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Internet Explorer').SvcVersion
+    If($IEVersion){
+        [string]$IESimpleName = "Internet Explorer $($IEVersion.Major)"
+        $arrayFeatureNames += "Internet Explorer",$IESimpleName,"IE","IE$($IEVersion.Major)"
+    }
+
+    #Check for Web Server IIS
+    $IISState = Get-IISVersion
+    If($IISState){
+        $arrayFeatureNames += "IIS $IISState"
+        $arrayFeatureNames += "Web Server"
+    }
+
+    # Check for Hyper-V
+    $HyperVRole = Check-HyperVStatus ($envOSRoleType)
+    If($HyperVRole -eq "Enabled"){
+        $arrayFeatureNames += "Hyper-V"
+        $arrayFeatureNames += "HyperV"
+    }
+    #NetFrameworkFeature
+
+    #Check for SMBv1
+    switch([string]$envOSVersionSimple){
+       "10.0" {$SMB1Enabled = (Get-SmbServerConfiguration | Select EnableSMB1Protocol).EnableSMB1Protocol}
+        default {$SMB1Enabled = (Get-Item HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters | ForEach-Object {Get-ItemProperty $_.pspath -ErrorAction SilentlyContinue}).SMB1}
+    }
+    If ( ($SMB1Enabled) -or ($SMB1Enabled -eq 1) ){$arrayFeatureNames += "SMBv1"}
+
+    # rebuild array with pipe delminated to be parsed
+    #--------------------- END: ROLES AND FEATURES ---------------------#
+
+    #-------------------- START: WORKSTATION PRODUCTS --------------------#
+    #Detection for Workstation Product STIGs
+    $officeInstalled = Get-OfficeVersion
+    If ($officeInstalled -eq "Office 13"){
+        $arrayFeatureNames += "Office 13","Office System 2013","Excel 2013","Project 2013","Outlook 2013",
+                                "PowerPoint 2013","Word 2013","Publisher 2013","Infopath 2013","Visio 2013",
+                                "Lync 2013"
+    }
+    If ($officeInstalled -eq "Office 16"){
+        $arrayFeatureNames += "Office 16","Office System 2016","Excel 2016","Project 2016","Outlook 2016",
+                                "PowerPoint 2016","Word 2016","Publisher 2016","Infopath 2016","Visio 2016",
+                                "Skype for Business 2016","OneDrive for Business 2016","Skype","OneDrive","OneNote 2016"
+    }
+
+    $chromeInstalled = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe' -ErrorAction SilentlyContinue).'(Default)'
+    If($chromeInstalled){
+        $chromeversion = (Get-Item $chromeInstalled -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
+        $arrayFeatureNames += "Chrome"
+    }
+
+    #$javaInstalled
+    #$adobeInstalled
+    #--------------------- END: WORKSTATION PRODUCTS ---------------------#
+
+    #-------------------- START: SERVER PRODUCTS --------------------#
+    #Detection for Server Products STIGs
+    $serverProductNames = @()
+    
+    #exchange server
+    $exchangeProduct = $env:ExchangeInstallPath + "\bin\ExSetup.exe"
+    If(Test-Path $exchangeProduct){
+        $productProperty =  Get-ItemProperty -Path $exchangeProduct
+        $productversion = $productProperty.VersionInfo.ProductVersion.Major
+        $arrayFeatureNames += "Exchange","Exchange $productversion"
+    }
+
+    #$sharepointProduct
+    $sharepointInstalled = Check-SharepointVersion
+    If ($sharepointInstalled){
+        [Version]$SPSVersion = $sharepointInstalled.DisplayVersion
+        If($SPSVersion.Major -eq 15){$arrayFeatureNames += "SharePoint 2013"}
+        If($SPSVersion.Major -eq 16){$arrayFeatureNames += "SharePoint 2016"}   
+    }
+
+    #$hbssProduct
+
+    #SQLProduct
+
+    $SQLInstalled = Check-SQLVersion
+    If ($SQLInstalled){
+        $sqlYear = $SQLInstalled.Split(" ")[2]
+        $sqlYearSimple = $sqlYear.Substring(2)
+        $sqlSvrShort = $SQLInstalled -replace $sqlYear,$sqlYearSimple
+        $sqlSvrShorter = ($SQLInstalled -replace "Server","SVR").Replace(' ','')
+        $sqlSvrShortest = ($sqlSvrShort -replace "Server","SVR").Replace(' ','')
+        $sqlShort = ($SQLInstalled -replace "Server","").Replace('  ',' ')
+        $sqlShorter = ($SQLInstalled -replace "Server","").Replace(' ','')
+        $sqlShortest = ($sqlSvrShort -replace "Server","").Replace(' ','')
+
+        $arrayFeatureNames += $SQLInstalled,$sqlSvrShort,$sqlSvrShorter,$sqlSvrShortest,$sqlShort,$sqlShorter,$sqlShortest 
+    }
+
+
+    #--------------------- END: SERVER PRODUCTS ---------------------#
+
+    #COMBINED LIST
+    [string]$list = $arrayFeatureNames -join '|'
+    return $list
+}
+
+Function Build-LGPOTemplate{
+    <#
+
+    Test Examples
+    $GPO = 'DoD Windows Server 2016 MS and DC v1r3\GPOs\{19859FE3-6E1B-41E7-BDF6-E8ADE5548FD9}'
+    $GptTmplPath = $GPO + "\DomainSysvol\GPO\Machine\microsoft\windows nt\SecEdit\GptTmpl.inf"
+    $MachineRegPOLPath = $GPO + "\DomainSysvol\GPO\Machine\registry.pol"
+    $UserRegPOLPath = $GPO + "\DomainSysvol\GPO\User\registry.pol"
+    $AuditCsvPath = $GPO + "\DomainSysvol\GPO\Machine\microsoft\windows nt\Audit\Audit.csv"
+    #>
+    [CmdletBinding()]
+    PARAM(
+        [Parameter(Mandatory=$true,
+                   Position=0)]
+        $Path,
+        [Parameter(Mandatory=$true,
+                   Position=1)]
+        $OutputPath,
+        [Parameter(Mandatory=$true,
+                   Position=2)]
+        $OutputName,
+        $Run
+    )
+
+    Begin
+    {
+        If(!(Test-Path $Path)){throw "[$Path] does not exist."}
+        #$lgpoout = $null
+        $lgpoout = "; ----------------------------------------------------------------------`n"
+        $lgpoout += "; PROCESSING POLICY`n"
+        $lgpoout += "; Source file:`n"
+        $lgpoout += "`n"
+    }
+
+    Process
+    {
+        $GptTmplContent = Split-IniContent -Path $Path
+        If (($GptTmplContent.Section -eq 'Registry Values').count -gt 0){
+            Write-host "'Registry Values' section found in [$Path], building list...." -ForegroundColor Cyan
+
+            $RegValueList = $GptTmplContent | Where {$_.section -eq 'Registry Values'}
+            Foreach ($RegKey in $RegValueList){
+                $RegKeyHive = ($RegKey.Name).Split('\')[0]
+                $RegKeyPath = Split-Path ($RegKey.Name).Split('\',2)[1] -Parent
+                $RegName = Split-Path $RegKey.Name -Leaf
+
+                #The -split operator supports specifying the maximum number of sub-strings to return.
+                #Some values may have additional commas in them that we don't want to split (eg. LegalNoticeText)
+                [String]$RegTypeInt,[String]$RegValue = $RegKey.Value -split ',',2
+
+                Switch($RegKeyHive){
+                    MACHINE {$LGPOHive = 'Computer';$RegProperty = 'HKLM:'}
+                    USER {$LGPOHive = 'User';$RegProperty = 'HKCU:'}
+                }
+
+                #https://www.motobit.com/help/RegEdit/cl72.htm
+                Switch($RegTypeInt){
+                    0 {$RegType = 'NONE'}
+                    1 {$RegType = 'SZ'}
+                    2 {$RegType = 'EXPAND_SZ'}
+                    3 {$RegType = 'BINARY'}
+                    4 {$RegType = 'DWORD'}
+                    5 {$RegType = 'DWORD_BIG_ENDIAN'}
+                    6 {$RegType = 'LINK'}
+                    7 {$RegType = 'MULTI_SZ'}
+                }
+
+                <#
+                If(Test-Path $RegProperty\$RegKeyPath){
+                    Set-ItemProperty $RegProperty\$RegKeyPath -Name $RegName -Value $RegValue -Force | Out-Null
+                }
+                Else{
+                    New-Item -Path $RegProperty\$RegKeyPath -Force | Out-Null
+                    New-ItemProperty $RegProperty\$RegKeyPath -Name $RegName -Value $RegValue -PropertyType $RegType -Force | Out-Null
+                }
+                #>
+                Write-host "   Adding Registry: $RegProperty\$RegKeyPath\$RegName" -ForegroundColor Gray
+                $lgpoout += "$LGPOHive`n"
+                $lgpoout += "$RegKeyPath`n"
+                $lgpoout += "$RegName`n"
+                $lgpoout += "$($RegType):$RegValue`n"
+                $lgpoout += "`n"
+            }
+        }
+        Else{
+            Write-host "No Registry Value were found in [$Path], skipping..." -ForegroundColor Gray
+        }
+    }
+    End {
+        $lgpoout | Out-File "$OutputPath\$OutputName.lgpo"
+    }
+}
+
+Function Build-SeceditFile{
+    <#
+
+
+    #>
+    [CmdletBinding()]
+    PARAM(
+        [Parameter(Mandatory=$true,
+                   Position=0)]
+        $GptTmplPath,
+        
+        [Parameter(Mandatory=$true,
+                   Position=1)]
+        $OutputPath,
+
+        [Parameter(Mandatory=$true,
+                   Position=2)]
+        $OutputName,
+
+        [parameter(Mandatory=$false)]
+        [string] $LogFolderPath
+    )
+
+    Begin
+    {
+        If(!(Test-Path $Path)){throw "[$Path] does not exist."}
+        $backupSeceditFile = $env:ComputerName + ".seceditbackup.inf"
+        If ($LogFolderPath){
+            $SeceditResults = secedit /export /cfg "$WorkingPath\$backupSeceditFile" /log "$LogFolderPath\$backupSeceditFile.log"
+        }
+        Else{
+            $SeceditResults = secedit /export /cfg "$WorkingPath\$backupSeceditFile"
+        }
+
+        #generate start of file
+        #$secedit = $null
+        $secedit =  "[Unicode]`n"
+        $secedit += "Unicode=yes`n"
+        $secedit += "[Version]`n"
+        $secedit += "signature=`"`$CHICAGO`$`"`n"
+        $secedit += "Revision=1`n"
+
+        #build array with content
+        $GptTmplContent = Split-IniContent -Path $GptTmplPath
+
+    }
+
+    Process
+    {
+        #get system access section
+        If (($GptTmplContent.Section -eq 'System Access').count -gt 0){
+            $SystemAccessFound = $true
+            Write-host "'System Access' section found in [$GptTmplPath], building list...." -ForegroundColor Cyan
+            $secedit += "[System Access]`n"
+
+            $AccessValueList = $GptTmplContent | Where {$_.section -eq 'System Access'}
+            Foreach ($AccessKey in $AccessValueList){
+                $AccessName = $AccessKey.Name
+                $AccessValue = $AccessKey.Value
+                If ($AccessName -eq "NewAdministratorName"){
+                    $AccessValue = $AccessValue -replace $AccessKey.Value, "$Global:NewAdministratorName"
+                }
+                If ($AccessName -eq "NewGuestName"){
+                    $AccessValue = $AccessValue -replace $AccessKey.Value, "$Global:NewGuestName"
+                }
+                $secedit += "$AccessName = $AccessValue`n"
+                #$secedit += "$PrivilegeValue" 
+            }
+        }
+        Else{
+            $SystemAccessFound = $false
+            Write-host "No System Access were found in [$Path], skipping..." -ForegroundColor Gray
+        }
+
+        
+        
+        #next get Privilege Rights section
+        If (($GptTmplContent.Section -eq 'Privilege Rights').count -gt 0){
+            $PrivilegeRightsFound = $true
+            Write-host "'Privilege Rights' section found in [$GptTmplPath], building list...." -ForegroundColor Cyan
+            $secedit += "[Privilege Rights]`n"
+
+            $PrivilegeValueList = $GptTmplContent | Where {$_.section -eq 'Privilege Rights'}
+            Foreach ($PrivilegeKey in $PrivilegeValueList){
+                $PrivilegeName = $PrivilegeKey.Name
+                $PrivilegeValue = $PrivilegeKey.Value
+
+                If ($PrivilegeValue -match "ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS"){
+                       
+                    If($IsMachinePartOfDomain){
+                        $EA_SID = Get-UserToSid -Domain $envMachineDNSDomain -User "Enterprise Admins"
+                        $DA_SID = Get-UserToSid -Domain $envMachineDNSDomain -User "Domain Admins"
+                        $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR ENTERPRISE ADMINS",$EA_SID
+                        $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR DOMAIN ADMINS",$DA_SID
+                    }
+                    Else{
+                        $ADMIN_SID = Get-UserToSid -LocalAccount 'Administrators'
+                        $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR ENTERPRISE ADMINS",$ADMIN_SID
+                        $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR DOMAIN ADMINS",$ADMIN_SID
+                    }
+                                                    
+                }
+                #split up values, get only unique values and make it a comma deliminated list again
+                $temp = $PrivilegeValue -split ","
+                $PrivilegeValue = $($temp | Get-Unique) -join "," 
+
+
+                $secedit += "$PrivilegeName = $PrivilegeValue`n"
+                #$secedit += "$PrivilegeValue" 
+            }
+        }
+        Else{
+            $PrivilegeRightsFound = $false
+            Write-host "No Privilege Rights were found in [$Path], skipping..." -ForegroundColor Gray
+        }
+
+    }
+    End {
+        Write-host "Saved file to [$OutputPath\$OutputName.seceditapply.inf]" -ForegroundColor Gray
+        $secedit | Out-File "$OutputPath\$OutputName.seceditapply.inf" -Force
+    }
 }
