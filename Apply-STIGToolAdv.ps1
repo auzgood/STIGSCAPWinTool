@@ -245,10 +245,12 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
         $env:SEE_MASK_NOZONECHECKS = 1
         If(Test-Path $GptTmplPath){
             Build-LGPOTemplate -Path $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)"
+            Start-Sleep 10
             Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/t ""$workingTempPath\$($GPO.name).lgpo""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).lgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).lgpo.stderr" -Wait -NoNewWindow
             
 
             Build-SeceditFile -GptTmplPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)" -LogFolderPath $workingLogPath
+            Start-Sleep 10
             $SeceditApplyResults = SECEDIT /configure /db secedit.sdb /cfg "$workingTempPath\$($GPO.name).seceditapply.inf"
 
             #Verify that update was successful (string reading, blegh.)
