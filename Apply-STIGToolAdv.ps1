@@ -14,62 +14,30 @@
 ## 
 ##   Change these variables to meet domain/local workgroup enviroment
 ##*===============================================
-$CheckGptTmpl = $true       #This setting allows the script to parse each GptTmpl.inf within the GPO backup 
-                            #Workgroup: It will change any domain SID to builtin administrator
-                            #Domain: It will change any Domain SID to another Domain SID 
+$ParseGptTmpl = $true                   #If set to True: As long as tools exist, GptTmpl.inf will be parsed within the GPO backup and
+                                        #                builds script for LocalPol.exe,LGPO.exe,Secedit.exe,AUDTIPOL.exe
+                                        #If set to False: Just runs LGPO.exe against GPO. This is ideal is GPO backup are off the same domain
 
-$Global:NewAdministratorName = "xAdmin"                    #if found in GptTmpl.inf change value for key: NewAdministratorName
-$Global:NewGuestName = "xGuest"                            #if found in GptTmpl.inf change value for key: NewGuestName
-#*S-1-5-80-3139157870-2983391045-3678747466-658725712-1809340420
+$Global:NewAdministratorName = "xAdmin" #if $ParseGptTmpl set to true and found in GptTmpl.inf. Changes value for key: NewAdministratorName
+$Global:NewGuestName = "xGuest"         #if $ParseGptTmpl set to true and found in GptTmpl.inf. Changes value for key: NewGuestName
 ##*===============================================
-##* CONSTANT VARIABLE DECLARATION
+##* PATH VARIABLE DECLARATION
 ##*===============================================
-## Variables: Domain Membership
-[boolean]$IsMachinePartOfDomain = (Get-WmiObject -Class 'Win32_ComputerSystem' -ErrorAction 'SilentlyContinue').PartOfDomain
-[string]$envMachineWorkgroup = ''
-[string]$envMachineADDomain = ''
-[string]$envLogonServer = ''
-[string]$MachineDomainController = ''
-If ($IsMachinePartOfDomain) {
-	[string]$envMachineADDomain = (Get-WmiObject -Class 'Win32_ComputerSystem' -ErrorAction 'SilentlyContinue').Domain | Where-Object { $_ } | ForEach-Object { $_.ToLower() }
-	Try {
-		[string]$envLogonServer = $env:LOGONSERVER | Where-Object { (($_) -and (-not $_.Contains('\\MicrosoftAccount'))) } | ForEach-Object { $_.TrimStart('\') } | ForEach-Object { ([Net.Dns]::GetHostEntry($_)).HostName }
-		# If running in system context, fall back on the logonserver value stored in the registry
-		If (-not $envLogonServer) { [string]$envLogonServer = Get-ItemProperty -LiteralPath 'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Group Policy\History' -ErrorAction 'SilentlyContinue' | Select-Object -ExpandProperty 'DCName' -ErrorAction 'SilentlyContinue' }
-		[string]$MachineDomainController = [DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().FindDomainController().Name
-	}
-	Catch { }
-}
-Else {
-	[string]$envMachineWorkgroup = (Get-WmiObject -Class 'Win32_ComputerSystem' -ErrorAction 'SilentlyContinue').Domain | Where-Object { $_ } | ForEach-Object { $_.ToUpper() }
-}
-[string]$envMachineDNSDomain = [Net.NetworkInformation.IPGlobalProperties]::GetIPGlobalProperties().DomainName | Where-Object { $_ } | ForEach-Object { $_.ToLower() }
-[string]$envUserDNSDomain = $env:USERDNSDOMAIN | Where-Object { $_ } | ForEach-Object { $_.ToLower() }
-Try {
-	[string]$envUserDomain = [Environment]::UserDomainName.ToUpper()
-}
-Catch { }
-
-## OS Variables
-[psobject]$envOS = Get-WmiObject -Class 'Win32_OperatingSystem' -ErrorAction 'SilentlyContinue'
-[string]$envOSName = $envOS.Caption.Trim()
-[string]$envOSServicePack = $envOS.CSDVersion
-[version]$envOSVersion = $envOS.Version
-[string]$envOSVersionMajor = $envOSVersion.Major
-[string]$envOSVersionMinor = $envOSVersion.Minor
-[string]$envOSVersionBuild = $envOSVersion.Build
-[string]$envOSVersionSimple = "$envOSVersionMajor.$envOSVersionMinor"
-[int32]$envOSRoleType = $envOS.ProductType
-[string]$enOSVersionRelease = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\" -Name ReleaseID).ReleaseId
-
-$Dated = (Get-Date -Format yyyyMMdd)
-
 ## Variables: Script Name and Script Paths
 [string]$scriptPath = $MyInvocation.MyCommand.Definition
 [string]$scriptName = [IO.Path]::GetFileNameWithoutExtension($scriptPath)
 [string]$scriptFileName = Split-Path -Path $scriptPath -Leaf
 [string]$scriptRoot = Split-Path -Path $scriptPath -Parent
 [string]$invokingScript = (Get-Variable -Name 'MyInvocation').Value.ScriptName
+#  Get the invoking script directory
+If ($invokingScript) {
+	#  If this script was invoked by another script
+	[string]$scriptParentPath = Split-Path -Path $invokingScript -Parent
+}
+Else {
+	#  If this script was not invoked by another script, fall back to the directory one level above this script
+	[string]$scriptParentPath = (Get-Item -LiteralPath $scriptRoot).Parent.FullName
+}
 
 #Get required folder and File paths
 [string]$ExtensionsPath = Join-Path -Path $scriptRoot -ChildPath 'Extensions'
@@ -79,31 +47,52 @@ $Dated = (Get-Date -Format yyyyMMdd)
 [string]$LogsPath = Join-Path -Path $scriptRoot -ChildPath 'Logs'
 [string]$BackupGPOPath = Join-Path -Path $scriptRoot -ChildPath 'GPO'
 
+$LGPOExePath ="$ToolsPath\LGPO.exe"
+$localPolExePath = "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe"
+
 [string]$workingLogPath = Join-Path -Path $LogsPath -ChildPath $env:COMPUTERNAME
     New-Item $workingLogPath -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
 [string]$workingTempPath = Join-Path -Path $TempPath -ChildPath $env:COMPUTERNAME
     New-Item $workingTempPath -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
 
+## Dot source the required Functions
+Try {
+	[string]$moduleToolkitMain = "$ExtensionsPath\STIGSCAPToolMainExtension.ps1"
+	If (-not (Test-Path -Path $moduleToolkitMain -PathType Leaf)) { Throw "Extension script does not exist at the specified location [$moduleToolkitMain]." }
+    Else{
+        . $moduleToolkitMain 
+        Write-Host "Loading main extension:       $moduleToolkitMain" -ForegroundColor Green
+    }
+}
+Catch {
+	[int32]$mainExitCode = 60008
+	Write-Error -Message "Module [$moduleToolkitMain] failed to load: `n$($_.Exception.Message)`n `n$($_.InvocationInfo.PositionMessage)" -ErrorAction 'Continue'
+	Exit $mainExitCode
+}
 
-$extensions = Get-ChildItem -Path $ExtensionsPath -Recurse -Include *.ps1
+#try to load any additional scripts
+$extensions = Get-ChildItem -Path $ExtensionsPath -Recurse -Include *.ps1 -Exclude STIGSCAPToolMainExtension.ps1
 foreach($extension in $extensions){
     Try{
-        Write-Host "Loading extension: $($extension.FullName)" -ForegroundColor Cyan
+        Write-Host "Loading additional extension: $($extension.FullName)" -ForegroundColor Cyan
         Import-Module $extension.FullName -ErrorAction SilentlyContinue
     }
     Catch {
-        Write-Host "Unable to import the extensions." $_.Exception.Message -ForegroundColor White -BackgroundColor Red
+        [int32]$mainExitCode = 60008
+        #Write-Error -Message "Module [$_] failed to load: `n$($_.Exception.Message)`n `n$($_.InvocationInfo.PositionMessage)" -ErrorAction 'Continue'
+        Write-Host "Module [$_] failed to load: $($_.Exception.Message)" -ForegroundColor White -BackgroundColor Red
     }
 }
 
+#try to load any additional modules
 $modules = Get-ChildItem -Path $ModulesPath -Recurse -Include *.psd1
 foreach($module in $modules){
     Try{
-        Write-Host "Loading module: $($module.FullName)" -ForegroundColor Cyan
+        Write-Host "Loading additional module:    $($module.FullName)" -ForegroundColor Cyan
         Import-Module $module.FullName -ErrorAction SilentlyContinue -DisableNameChecking -NoClobber
     }
     Catch {
-        Write-Host "Unable to import the module." $_.Exception.Message -ForegroundColor White -BackgroundColor Red
+        Write-Host "Unable to import the module: $($_.Exception.Message)" -ForegroundColor White -BackgroundColor Red
     }
 }
 
@@ -113,13 +102,15 @@ foreach($module in $modules){
 Start-Log "$workingLogPath\$scriptName.log"
 
 if (!(Test-IsAdmin -CheckOnly)){
-    Write-Log -Message "You are not currently running this under an Administrator account! `nThis script requires to be ran as a priviledge Administrator account." -CustomComponent "Priviledged Administrator" -ColorLevel 6 -NewLine -HostMsg 
+    Write-Log -Message "You are not currently running this under an Administrator account! `nThis script requires to be ran as a priviledge Administrator account." -CustomComponent "Priviledge" -ColorLevel 6 -NewLine -HostMsg 
     Exit -1
 }
+Try { Set-ExecutionPolicy -ExecutionPolicy 'ByPass' -Scope 'Process' -Force -ErrorAction 'Stop' } Catch {}
 
+# Get a list of Features on this machine
 $additionalFeatureNames = Build-STIGFeatureList
-
 #-------------------- START: OPERATING SYSTEM NAME AND ROLE --------------------#
+
 #Build OS simple names and roles
 Switch ($envOSRoleType) {
 	3 { [string]$envOSTrimName = $envOSName.Trim("Microsoft|Enterprise|Standard|Datacenter").Replace("Windows","").Trim()
@@ -152,7 +143,6 @@ Else{
     $envOSShortest = ($envOSShort -replace "Server","SVR").Replace(' ','')
 }
 $envOSSimpleNames = "$envOSSimpleName|$envOSShort|$envOSShorter|$envOSShortest"
-
 #--------------------- END: OPERATING SYSTEM NAME AND ROLE ---------------------#
 
 #-------------------- START: DEVIATION LIST --------------------#
@@ -237,87 +227,92 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
     Write-Progress -Activity "Applying policy $($GPO.name)" -Status "Policy $applyProgess of $($GPOs.Count)" -PercentComplete (($applyProgess / $GPOs.Count) * 100)
 
     If($GPO.Order -ne 0){
-        $GptTmplPath = $GPO.Path + "\DomainSysvol\GPO\Machine\microsoft\windows nt\SecEdit\GptTmpl.inf"
-        $MachineRegPOLPath = $GPO.Path + "\DomainSysvol\GPO\Machine\registry.pol"
-        $UserRegPOLPath = $GPO.Path + "\DomainSysvol\GPO\User\registry.pol"
-        $AuditCsvPath = $GPO.Path + "\DomainSysvol\GPO\Machine\microsoft\windows nt\Audit\Audit.csv"
-        $xmlRegPrefPath = $GPO.Path + "\DomainSysvol\GPO\Machine\Preferences\Registry\Registry.xml"
+        If($ParseGptTmpl -and (Test-Path $LGPOExePath) -and (Test-Path $localPolExePath)){
+            $GptTmplPath = $GPO.Path + "\DomainSysvol\GPO\Machine\microsoft\windows nt\SecEdit\GptTmpl.inf"
+            $MachineRegPOLPath = $GPO.Path + "\DomainSysvol\GPO\Machine\registry.pol"
+            $UserRegPOLPath = $GPO.Path + "\DomainSysvol\GPO\User\registry.pol"
+            $AuditCsvPath = $GPO.Path + "\DomainSysvol\GPO\Machine\microsoft\windows nt\Audit\Audit.csv"
+            $xmlRegPrefPath = $GPO.Path + "\DomainSysvol\GPO\Machine\Preferences\Registry\Registry.xml"
         
-        Write-Log -Message "Applying [$($GPO.name)] $orderLabel..." -CustomComponent "Applying Policies" -ColorLevel 2 -NewLine None -HostMsg 
+            Write-Log -Message "Applying [$($GPO.name)] $orderLabel..." -CustomComponent "Applying Policies" -ColorLevel 2 -NewLine None -HostMsg 
 
-        $env:SEE_MASK_NOZONECHECKS = 1
-        If(Test-Path $GptTmplPath){
-            Build-LGPOTemplate -Path $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)"
-            Start-Sleep 10
-            Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/t ""$workingTempPath\$($GPO.name).lgpo""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).lgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).lgpo.stderr" -Wait -NoNewWindow
+            $env:SEE_MASK_NOZONECHECKS = 1
+            If(Test-Path $GptTmplPath){
+                Build-LGPOTemplate -Path $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)"
+                Start-Sleep 10
+                Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/t ""$workingTempPath\$($GPO.name).lgpo""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).lgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).lgpo.stderr" -Wait -NoNewWindow
             
 
-            Build-SeceditFile -GptTmplPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)" -LogFolderPath $workingLogPath
-            Start-Sleep 10
-            $SeceditApplyResults = SECEDIT /configure /db secedit.sdb /cfg "$workingTempPath\$($GPO.name).seceditapply.inf"
+                Build-SeceditFile -GptTmplPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)" -LogFolderPath $workingLogPath
+                Start-Sleep 10
+                $SeceditApplyResults = SECEDIT /configure /db secedit.sdb /cfg "$workingTempPath\$($GPO.name).seceditapply.inf"
 
-            #Verify that update was successful (string reading, blegh.)
-            if($SeceditApplyResults[$SeceditApplyResults.Count-2] -eq "The task has completed successfully."){
-                Write-Verbose "Import was successful."
-            }
-            else{
-                #Import failed for some reason
-                Write-Verbose "Import from [$workingTempPath\$($GPO.name).seceditapply.inf] failed."
-                Write-Error -Message "The import from [$workingTempPath\$($GPO.name).seceditapply.inf] using secedit failed. Full Text Below:
-                $SeceditApplyResults)"
-            }
+                #Verify that update was successful (string reading, blegh.)
+                if($SeceditApplyResults[$SeceditApplyResults.Count-2] -eq "The task has completed successfully."){
+                    $appliedPolicies ++
+                }
+                Else{
+                    #Import failed for some reason
+                    Write-Log -Message "The import from [$workingTempPath\$($GPO.name).seceditapply.inf] using secedit failed. Full Text Below: $SeceditApplyResults" -CustomComponent "SECEDIT" -ColorLevel 7 -NewLine None -HostMsg 
+                    $errorPolicies ++
+                }
 
-            # Command Example: SECEDIT.EXE /configure /db secedit.sdb /cfg [path]\GptTmpl.inf /log [path]\GptTmpl.log
-            #Start-Process SECEDIT.EXE -ArgumentList "/configure /db secedit.sdb /cfg ""$GptTmplPath"" /log $workingLogPath\GptTmpl.log" -RedirectStandardOutput "$workingTempPath\$($GPO.name).secedit.stdout" -Wait -NoNewWindow
-            #parses the GptTmpl.inf for registry values and builds a text file for LGPO to run later
-        }
+                # Command Example: SECEDIT.EXE /configure /db secedit.sdb /cfg [path]\GptTmpl.inf /log [path]\GptTmpl.log
+                #Start-Process SECEDIT.EXE -ArgumentList "/configure /db secedit.sdb /cfg ""$GptTmplPath"" /log $workingLogPath\GptTmpl.log" -RedirectStandardOutput "$workingTempPath\$($GPO.name).secedit.stdout" -Wait -NoNewWindow
+                #parses the GptTmpl.inf for registry values and builds a text file for LGPO to run later
+
+            }
         
-        If(Test-Path $MachineRegPOLPath){
-            # Command Example: LocalPol.exe -m -v -f [path]\registry.pol
-            Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-m -v -f ""$MachineRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.machine.stdout" -Wait -NoNewWindow
-        }
+            If(Test-Path $MachineRegPOLPath){
+                # Command Example: LocalPol.exe -m -v -f [path]\registry.pol
+                Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-m -v -f ""$MachineRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.machine.stdout" -Wait -NoNewWindow
+            }
 
-        If(Test-Path $UserRegPOLPath){
-            # Command Example: LocalPol.EXE -u -v -f [path]\registry.pol
-            Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-u -v -f ""$UserRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.user.stdout" -Wait -NoNewWindow
-        }
+            If(Test-Path $UserRegPOLPath){
+                # Command Example: LocalPol.EXE -u -v -f [path]\registry.pol
+                Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-u -v -f ""$UserRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.user.stdout" -Wait -NoNewWindow
+            }
 
-        If(Test-Path $AuditCsvPath){
-            # Command Example: AUDITPOL /restore /file:[path]\Audit.csv    
-            Start-Process AUDITPOL.EXE -ArgumentList "/restore /file:""$AuditCsvPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).auditpol.stdout" -Wait -NoNewWindow
+            If(Test-Path $AuditCsvPath){
+                # Command Example: AUDITPOL /restore /file:[path]\Audit.csv    
+                Start-Process AUDITPOL.EXE -ArgumentList "/restore /file:""$AuditCsvPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).auditpol.stdout" -Wait -NoNewWindow
+            }
         }
-
-        If(Test-Path "$ToolsPath\LGPO.exe"){
-            Write-Host "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -ForegroundColor Gray
+        ElseIf(Test-Path "$ToolsPath\LGPO.exe"){
+            Write-Log -Message "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -CustomComponent "LGPO" -ColorLevel 1 -NewLine None -HostMsg 
             Try{
                 #Start-Process "$env:windir\system32\cscript.exe" -ArgumentList "//NOLOGO ""$ToolsPath\LocalGPO\LocalGPO.wsf"" /Path:""$($GPO.Path)"" /Validate /NoOverwrite" -RedirectStandardOutput "$workingTempPath\$($GPO.name).gpo.log" -Wait -NoNewWindow
                 Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/q /v /g ""$($GPO.Path)""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).allgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).allgpo.stderr" -Wait -NoNewWindow
                 $appliedPolicies ++
             }
             Catch{
-                Write-Host "Unable to Apply [$($GPO.name)] policy, see [$workingTempPath\$($GPO.name)_lgpo.stderr] for details" -ForegroundColor Yellow
+                Write-Log -Message "Unable to Apply [$($GPO.name)] policy, see [$workingTempPath\$($GPO.name)_lgpo.stderr] for details" -CustomComponent "LGPO" -ColorLevel 2 -NewLine None -HostMsg 
                 $errorPolicies ++
             }
         }
+        Else{
+           Write-Log -Message "Unable to Apply [$($GPO.name)] policy, [LGPO.exe] and [localPol.exe] in tools directory are missing" -CustomComponent "LGPO" -ColorLevel 3 -NewLine None -HostMsg
+           $errorPolicies ++
+        }
         $env:SEE_MASK_NOZONECHECKS = 0
-        
     }
     Else{
-        Write-Host "Ignoring [$($GPO.name)] from [$($GPO.Path)] because it's [$orderLabel]..." -ForegroundColor DarkYellow
+        Write-Log -Message "Ignoring [$($GPO.name)] from [$($GPO.Path)] because it's [$orderLabel]..." -CustomComponent $orderLabel -ColorLevel 8 -NewLine None -HostMsg 
     }
     $applyProgess++
 }
 
-Write-Host "Determinig if additonal configuration needs to be done." -ForegroundColor Cyan
+Write-Log -Message "Determining if additonal configuration needs to be done." -CustomComponent "Modules" -ColorLevel 4 -NewLine Before -HostMsg 
+
 If($envOSRoleType -eq 2){
-    Write-Host "Extension: Applying STIG'd items for AD..." -ForegroundColor Yellow
+    Write-Log -Message "Extension: Applying STIG'd items for AD..." -CustomComponent "AD" -ColorLevel 8 -NewLine None -HostMsg 
     Set-ActiveDirectoryStigItems  | Out-File -FilePath "$workingLogPath\ADSTIGS.log"
     $additionalscripts ++
-}
+} #end loop
 
-$IISversion = Get-IISVersion
-If($IISversion){
-    Write-Host "Extension: Applying STIG'd items for IIS..." -ForegroundColor Yellow
+
+If(($additionalFeatureNames -match "IIS") -and ($envOSRoleType -ne 1)){
+    Write-Log -Message "Extension: Applying STIG'd items for IIS..." -CustomComponent "IIS" -ColorLevel 8 -NewLine None -HostMsg 
     # Get CSV files for IIS 7 Web Site STIGs
     # Change to your own files if you do not want to use the default files
     If(Get-WebConfigurationBackup -Name BeforeIISSTig){
@@ -325,7 +320,7 @@ If($IISversion){
     }
     Backup-WebConfiguration -Name BeforeIISSTig | Out-Null
     $moduleBase = (Get-Module IIS7STIGs).ModuleBase
-    . "$moduleBase\ApplyIIS7STIGs.ps1" | Out-File -FilePath "$LogsPath\$env:COMPUTERNAME\IIS7STIGS.log"
+    . "$moduleBase\ApplyIIS7STIGs.ps1" | Out-File -FilePath "$workingLogPath\IIS7STIGS.log"
     $additionalscripts ++
 }
 

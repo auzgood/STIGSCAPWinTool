@@ -29,191 +29,81 @@
 # GPTemplate   = Uses LGPO.exe; Applies security template
 # 
 #========================================================================
-<#[CmdletBinding()]
-  PARAM(
-    # _Manual-xccdf.xml file name
-    [Parameter(Mandatory=$true,
-               Position=0)]
-    [ValidateScript({Test-Path $_ })]
-    [string]
-    $xccdf,
-    # Location to save the STIG auditing file
-    [Parameter(Mandatory=$false,
-               Position=1)]
-
-    [string]
-    $outFile
-  )
-#>
-
-
-
-###### FUNCTIONS ############
-Function Start-Log{
-    param (
-        [string]$FilePath
-    )
- 
-    try{
-        if (!(Test-Path $FilePath))
-        {
-             ## Create the log file
-             New-Item (Split-Path $FilePath -Parent) -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
-             New-Item $FilePath -Type File | Out-Null
-        }
- 
-        ## Set the global variable to be used as the FilePath for all subsequent Write-Log
-        ## calls in this session
-        $global:ScriptLogFilePath = $FilePath
-    }
-    catch{
-        Write-Error $_.Exception.Message
-    }
-}
-
-Function Write-Log{
-    PARAM(
-        [Parameter(Mandatory = $true)]
-        [String]$Message,
-        [string]$Component,
-        [Parameter()]
-        [ValidateSet(1, 2, 3)]
-        [int]$Severity = 1,
-        [switch]$OutputHost = $false,
-        [string]$OutputHostColor
-    )
-    Begin{
-        $TimeGenerated = "$(Get-Date -Format HH:mm:ss).$((Get-Date).Millisecond)+000"
-        $Line = '<![LOG[{0}]LOG]!><time="{1}" date="{2}" component="{3}" context="" type="{4}" thread="" file="">'
-        If ($Component){
-            $LineFormat = $Message, $TimeGenerated, (Get-Date -Format MM-dd-yyyy), "$Component".toupper().Replace(" ","_"), $Severity
-        }
-        Else{
-            $LineFormat = $Message, $TimeGenerated, (Get-Date -Format MM-dd-yyyy), "$($MyInvocation.ScriptName | Split-Path -Leaf):$($MyInvocation.ScriptLineNumber)", $Severity
-        }
-        $Line = $Line -f $LineFormat
-
-        If ($OutputHost){
-            If ($OutputHostColor){
-                $Color = $OutputHostColor
-            }
-            Else{
-                Switch ($Severity) {
-				    3 { $Color = "Red" }
-				    2 { $Color = "Yellow" }
-				    1 { $Color = "White" }
-			    }
-            }
-            #$OutputBoxMessage = $($OutputBoxMessage).replace("[","(").replace("]",")")
-            Write-Host "`n$($Message)" -ForegroundColor $Color
-        }
-    }
-    Process{
-        Try{
-        Add-Content -Value $Line -Path $global:ScriptLogFilePath
-        }
-        Catch{
-            Write-Error $_.Exception.Message
-            Exit
-        }
-    }
-}
-##*============
-
-
-function Get-IniContent ($filePath)
-{
-    $ini = @{}
-    switch -regex -file $FilePath
-    {
-        "^\[(.+)\]" # Section
-        {
-            $section = $matches[1]
-            $ini[$section] = @{}
-            $CommentCount = 0
-        }
-        "(.+?)\s*=(.*)" # Key
-        {
-            $name,$value = $matches[1..2]
-            $ini[$section][$name] += $value.Trim() -split "`r`n"
-        }
-    }
-    return $ini
-}
-
-Function Call-IniContent{
-[CmdletBinding()]
-    PARAM(
-        # _Manual-xccdf.xml file path
-        [Parameter(Mandatory=$true,
-                   Position=0)]
-        [xml]$Content,
-        [ValidateSet('Validate', 'Remediate')]
-        $Section,
-        [ValidateSet('ScriptBlock', 'ScriptFile', 'Function', 'LGPO','GPTemplate')]
-        $key,
-        [string[]]$args,
-        $results
-    )
-    If ($Content.$Section.$key){
-        $scriptBlock = [Scriptblock]::Create($Content.$Section.$key)
-        
-        try{
-            If($key -eq 'ScriptBlock'){$result = Invoke-Command -ScriptBlock $key }
-            If($key -eq 'Function' -and $args -eq $null){$result = Invoke-Command -ScriptBlock $key}
-            If($key -eq 'Function' -and $args){$result = Invoke-Command -ScriptBlock $key -ArgumentList $args}
-            If($key -eq 'ScriptFile'){
-                If (Test-Path "\Scripts\$key" -ErrorAction SilentlyContinue){
-                    $result = . "\Scripts\$key" $args
-                }
-            }
-            If($key -eq 'LGPO'){
-                $Outfile = "$env:Temp\$($Content.Version)_LGPO.stdOut"
-                $ErrorFile = "$env:Temp\$($Content.Version)_LGPO.stdError"
-                $Config.$Section.LGPO | Out-File $env:Temp\LGPO.txt -Force
-                $result = Start-Process .\LGPO.exe -ArgumentList "/t $env:Temp\LGPO.txt /v" -PassThru -Wait -NoNewWindow -RedirectStandardOutput $Outfile -RedirectStandardError $ErrorFile -Verbose
-            }
-            If($key -eq 'GPTemplate'){}
-
-        }
-        Catch {
-            Write-Host "$Section $key failed to run. Check syntax " -ForegroundColor red
-        }
-    }
-
-}
-
-
 ##*===============================================
-##* VARIABLE DECLARATION
+##* PATH VARIABLE DECLARATION
 ##*===============================================
-$Dated = (Get-Date -Format yyyyMMdd)
-
 ## Variables: Script Name and Script Paths
 [string]$scriptPath = $MyInvocation.MyCommand.Definition
 [string]$scriptName = [IO.Path]::GetFileNameWithoutExtension($scriptPath)
 [string]$scriptFileName = Split-Path -Path $scriptPath -Leaf
 [string]$scriptRoot = Split-Path -Path $scriptPath -Parent
 [string]$invokingScript = (Get-Variable -Name 'MyInvocation').Value.ScriptName
+#  Get the invoking script directory
+If ($invokingScript) {
+	#  If this script was invoked by another script
+	[string]$scriptParentPath = Split-Path -Path $invokingScript -Parent
+}
+Else {
+	#  If this script was not invoked by another script, fall back to the directory one level above this script
+	[string]$scriptParentPath = (Get-Item -LiteralPath $scriptRoot).Parent.FullName
+}
 
 #Get required folder and File paths
-[string]$ExtensionPath = Join-Path -Path $scriptRoot -ChildPath 'Extensions'
+[string]$ExtensionsPath = Join-Path -Path $scriptRoot -ChildPath 'Extensions'
+[string]$ModulesPath = Join-Path -Path $scriptRoot -ChildPath 'Modules'
 [string]$ToolsPath = Join-Path -Path $scriptRoot -ChildPath 'Tools'
 [string]$TempPath = Join-Path -Path $scriptRoot -ChildPath 'Temp'
+[string]$LogsPath = Join-Path -Path $scriptRoot -ChildPath 'Logs'
+[string]$BackupGPOPath = Join-Path -Path $scriptRoot -ChildPath 'GPO'
 
+[string]$workingLogPath = Join-Path -Path $LogsPath -ChildPath $env:COMPUTERNAME
+    New-Item $workingLogPath -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
+[string]$workingTempPath = Join-Path -Path $TempPath -ChildPath $env:COMPUTERNAME
+    New-Item $workingTempPath -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
 
-New-Item -Path "$TempPath\$env:computername" -Type Directory -ErrorAction SilentlyContinue
-$backupTempPath = Get-Item "$TempPath\$env:computername"
-
-#start logging
-Start-Log -FilePath "$backupTempPath\Log\$Dated.log"
-
-#Load all extensions
-$ExtensionScripts = (Get-ChildItem -Path $ExtensionPath).FullName
-Foreach ($ExtensionScript in $ExtensionScripts){
-    Write-Host "Loading $ExtensionScript" -ForegroundColor Cyan
-    . "$ExtensionScript"
+## Dot source the required Functions
+Try {
+	[string]$moduleToolkitMain = "$ExtensionsPath\STIGSCAPToolMainExtension.ps1"
+	If (-not (Test-Path -Path $moduleToolkitMain -PathType Leaf)) { Throw "Extension script does not exist at the specified location [$moduleToolkitMain]." }
+    Else{
+        . $moduleToolkitMain 
+        Write-Host "Loading main extension:       $moduleToolkitMain" -ForegroundColor Green
+    }
 }
+Catch {
+	[int32]$mainExitCode = 60008
+	Write-Error -Message "Module [$moduleToolkitMain] failed to load: `n$($_.Exception.Message)`n `n$($_.InvocationInfo.PositionMessage)" -ErrorAction 'Continue'
+	Exit $mainExitCode
+}
+
+#try to load any additional scripts
+$extensions = Get-ChildItem -Path $ExtensionsPath -Recurse -Include *.ps1 -Exclude STIGSCAPToolMainExtension.ps1
+foreach($extension in $extensions){
+    Try{
+        Write-Host "Loading additional extension: $($extension.FullName)" -ForegroundColor Cyan
+        Import-Module $extension.FullName -ErrorAction SilentlyContinue
+    }
+    Catch {
+        [int32]$mainExitCode = 60008
+        Write-Error -Message "Module [$_] failed to load: `n$($_.Exception.Message)`n `n$($_.InvocationInfo.PositionMessage)" -ErrorAction 'Continue'
+    }
+}
+
+#try to load any additional modules
+$modules = Get-ChildItem -Path $ModulesPath -Recurse -Include *.psd1
+foreach($module in $modules){
+    Try{
+        Write-Host "Loading additional module:    $($module.FullName)" -ForegroundColor Cyan
+        Import-Module $module.FullName -ErrorAction SilentlyContinue -DisableNameChecking -NoClobber
+    }
+    Catch {
+        Write-Host "Unable to import the module." $_.Exception.Message -ForegroundColor White -BackgroundColor Red
+    }
+}
+
+##*===============================================
+##* MAIN ROUTINE
+##*===============================================
 
 # download and unzip your benchmark from DIA NISTA 
 # from: http://iase.disa.mil/stigs/compilations/Pages/index.aspx
