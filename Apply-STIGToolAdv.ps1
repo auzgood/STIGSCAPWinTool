@@ -268,7 +268,7 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
             #Start-Process SECEDIT.EXE -ArgumentList "/configure /db secedit.sdb /cfg ""$GptTmplPath"" /log $workingLogPath\GptTmpl.log" -RedirectStandardOutput "$workingTempPath\$($GPO.name).secedit.stdout" -Wait -NoNewWindow
             #parses the GptTmpl.inf for registry values and builds a text file for LGPO to run later
         }
-        <#
+        
         If(Test-Path $MachineRegPOLPath){
             # Command Example: LocalPol.exe -m -v -f [path]\registry.pol
             Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-m -v -f ""$MachineRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.machine.stdout" -Wait -NoNewWindow
@@ -284,7 +284,7 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
             Start-Process AUDITPOL.EXE -ArgumentList "/restore /file:""$AuditCsvPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).auditpol.stdout" -Wait -NoNewWindow
         }
 
-        #Write-Host "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -ForegroundColor Gray
+        Write-Host "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -ForegroundColor Gray
         Try{
             #Start-Process "$env:windir\system32\cscript.exe" -ArgumentList "//NOLOGO ""$ToolsPath\LocalGPO\LocalGPO.wsf"" /Path:""$($GPO.Path)"" /Validate /NoOverwrite" -RedirectStandardOutput "$workingTempPath\$($GPO.name).gpo.log" -Wait -NoNewWindow
             Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/q /v /g ""$($GPO.Path)""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).allgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).allgpo.stderr" -Wait -NoNewWindow
@@ -295,7 +295,7 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
             $errorPolicies ++
         }
         $env:SEE_MASK_NOZONECHECKS = 0
-        #>
+        
     }
     Else{
         Write-Host "Ignoring [$($GPO.name)] from [$($GPO.Path)] because it's [$orderLabel]..." -ForegroundColor DarkYellow
