@@ -18,11 +18,8 @@ $CheckGptTmpl = $true       #This setting allows the script to parse each GptTmp
                             #Workgroup: It will change any domain SID to builtin administrator
                             #Domain: It will change any Domain SID to another Domain SID 
 
-$ReplaceGptTmpl_EA = "ADD YOUR ENTERPRISE ADMINS"   #if found in GptTmpl.inf change value to: Enterprise Admins
-$ReplaceGptTmpl_DA = "ADD YOUR DOMAIN ADMINS"       #if found in GptTmpl.inf change value to: Domain Admins
-$ReplaceGptTmpl_AD = ""
-$NewAdministratorName = "xAdmin"                    #if found in GptTmpl.inf change value for key: NewAdministratorName
-$NewGuestName = "xGuest"                            #if found in GptTmpl.inf change value for key: NewGuestName
+$Global:NewAdministratorName = "xAdmin"                    #if found in GptTmpl.inf change value for key: NewAdministratorName
+$Global:NewGuestName = "xGuest"                            #if found in GptTmpl.inf change value for key: NewGuestName
 #*S-1-5-80-3139157870-2983391045-3678747466-658725712-1809340420
 ##*===============================================
 ##* CONSTANT VARIABLE DECLARATION
@@ -113,6 +110,11 @@ foreach($module in $modules){
 ##*===============================================
 ##* MAIN ROUTINE
 ##*===============================================
+if (!(Test-IsAdmin -CheckOnly)){
+    Write-Warning "You are not currently running this under an Administrator account! `nThis script requires to be ran as a priviledge Administrator account."  
+    Exit -1
+}
+
 $additionalFeatureNames = Build-STIGFeatureList
 
 #-------------------- START: OPERATING SYSTEM NAME AND ROLE --------------------#
@@ -236,36 +238,54 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
         $MachineRegPOLPath = $GPO.Path + "\DomainSysvol\GPO\Machine\registry.pol"
         $UserRegPOLPath = $GPO.Path + "\DomainSysvol\GPO\User\registry.pol"
         $AuditCsvPath = $GPO.Path + "\DomainSysvol\GPO\Machine\microsoft\windows nt\Audit\Audit.csv"
-
+        $xmlRegPrefPath = $GPO.Path + "\DomainSysvol\GPO\Machine\Preferences\Registry\Registry.xml"
+        
         Write-Host "Applying [$($GPO.name)] $orderLabel..." -ForegroundColor Yellow
 
         $env:SEE_MASK_NOZONECHECKS = 1
         If(Test-Path $GptTmplPath){
-            # Command Example: SECEDIT.EXE /configure /db secedit.sdb /cfg [path]\GptTmpl.inf /log [path]\GptTmpl.log
-            #Start-Process SECEDIT.EXE -ArgumentList "/configure /db secedit.sdb /cfg ""$GptTmplPath"" /log $workingLogPath\GptTmpl.log" -RedirectStandardOutput "$workingTempPath\$($GPO.name)_secedit.stdout" -Wait -NoNewWindow
-            #parses the GptTmpl.inf for registry values and builds a text file for LGPO to run later
             Build-LGPOTemplate -Path $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)"
-        }
+            Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/t ""$workingTempPath\$($GPO.name).lgpo""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).lgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).lgpo.stderr" -Wait -NoNewWindow
+            
 
+            Build-SeceditFile -GptTmplPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)" -LogFolderPath $workingLogPath
+            $SeceditApplyResults = SECEDIT /configure /db secedit.sdb /cfg "$workingTempPath\$($GPO.name).seceditapply.inf"
+
+            #Verify that update was successful (string reading, blegh.)
+            if($SeceditApplyResults[$SeceditApplyResults.Count-2] -eq "The task has completed successfully."){
+                Write-Verbose "Import was successful."
+            }
+            else{
+                #Import failed for some reason
+                Write-Verbose "Import from [$workingTempPath\$($GPO.name).seceditapply.inf] failed."
+                Write-Error -Message "The import from [$workingTempPath\$($GPO.name).seceditapply.inf] using secedit failed. Full Text Below:
+                $SeceditApplyResults)"
+            }
+
+            # Command Example: SECEDIT.EXE /configure /db secedit.sdb /cfg [path]\GptTmpl.inf /log [path]\GptTmpl.log
+            #Start-Process SECEDIT.EXE -ArgumentList "/configure /db secedit.sdb /cfg ""$GptTmplPath"" /log $workingLogPath\GptTmpl.log" -RedirectStandardOutput "$workingTempPath\$($GPO.name).secedit.stdout" -Wait -NoNewWindow
+            #parses the GptTmpl.inf for registry values and builds a text file for LGPO to run later
+        }
+        <#
         If(Test-Path $MachineRegPOLPath){
             # Command Example: LocalPol.exe -m -v -f [path]\registry.pol
-            Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-m -v -f ""$MachineRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name)_localpol_machine.stdout" -Wait -NoNewWindow
+            Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-m -v -f ""$MachineRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.machine.stdout" -Wait -NoNewWindow
         }
 
         If(Test-Path $UserRegPOLPath){
             # Command Example: LocalPol.EXE -u -v -f [path]\registry.pol
-            Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-u -v -f ""$UserRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name)_localpol_user.stdout" -Wait -NoNewWindow
+            Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-u -v -f ""$UserRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.user.stdout" -Wait -NoNewWindow
         }
 
         If(Test-Path $AuditCsvPath){
             # Command Example: AUDITPOL /restore /file:[path]\Audit.csv    
-            Start-Process AUDITPOL.EXE -ArgumentList "/restore /file:""$AuditCsvPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name)_auditpol.stdout" -Wait -NoNewWindow
+            Start-Process AUDITPOL.EXE -ArgumentList "/restore /file:""$AuditCsvPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).auditpol.stdout" -Wait -NoNewWindow
         }
 
-        Write-Host "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -ForegroundColor Gray
+        #Write-Host "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -ForegroundColor Gray
         Try{
-            #Start-Process "$env:windir\system32\cscript.exe" -ArgumentList "//NOLOGO ""$ToolsPath\LocalGPO\LocalGPO.wsf"" /Path:""$($GPO.Path)"" /Validate /NoOverwrite" -RedirectStandardOutput "$workingTempPath\$($GPO.name)_localgpo.log" -Wait -NoNewWindow
-            Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/q /v /g ""$($GPO.Path)""" -RedirectStandardOutput "$workingTempPath\$($GPO.name)_lgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name)_lgpo.stderr" -Wait -NoNewWindow
+            #Start-Process "$env:windir\system32\cscript.exe" -ArgumentList "//NOLOGO ""$ToolsPath\LocalGPO\LocalGPO.wsf"" /Path:""$($GPO.Path)"" /Validate /NoOverwrite" -RedirectStandardOutput "$workingTempPath\$($GPO.name).gpo.log" -Wait -NoNewWindow
+            Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/q /v /g ""$($GPO.Path)""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).allgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).allgpo.stderr" -Wait -NoNewWindow
             $appliedPolicies ++
         }
         Catch{
@@ -273,7 +293,7 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
             $errorPolicies ++
         }
         $env:SEE_MASK_NOZONECHECKS = 0
-        
+        #>
     }
     Else{
         Write-Host "Ignoring [$($GPO.name)] from [$($GPO.Path)] because it's [$orderLabel]..." -ForegroundColor DarkYellow
@@ -281,7 +301,7 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
     $applyProgess++
 }
 
-Write-Host "Determinig if additonal configuration eeds to be done." -ForegroundColor Cyan
+Write-Host "Determinig if additonal configuration needs to be done." -ForegroundColor Cyan
 If($envOSRoleType -eq 2){
     Write-Host "Extension: Applying STIG'd items for AD..." -ForegroundColor Yellow
     Set-ActiveDirectoryStigItems  | Out-File -FilePath "$workingLogPath\ADSTIGS.log"

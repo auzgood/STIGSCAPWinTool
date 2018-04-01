@@ -98,28 +98,32 @@ Function Get-IISVersion{
 
 Function Check-HyperVStatus ($OSRole){
     # Get the Hyper-V feature and store it in $hyperv
-    
-    Switch ($OSRole) {
-	    3 { $hyperv = (Get-WindowsFeature -Name Hyper-V -ErrorAction SilentlyContinue).Installed
-            }
-	    2 { $hyperv = (Get-WindowsFeature -Name Hyper-V -ErrorAction SilentlyContinue).Installed
-            }
-	    1 { $hyperv = Get-WindowsOptionalFeature -FeatureName Microsoft-Hyper-V-All -Online -ErrorAction SilentlyContinue
-            }
-	    Default { }
-    }
-
-    If($hyperv){
-        # Check if Hyper-V is already enabled.
-        if($hyperv.State -eq "Enabled") {
-            $state = 'Enabled'
-        } else {
-            $state = 'Disabled'
+    if (Test-IsAdmin -CheckOnly){
+        Switch ($OSRole) {
+	        3 { $hyperv = (Get-WindowsFeature -Name Hyper-V -ErrorAction SilentlyContinue).Installed
+                }
+	        2 { $hyperv = (Get-WindowsFeature -Name Hyper-V -ErrorAction SilentlyContinue).Installed
+                }
+	        1 { $hyperv = Get-WindowsOptionalFeature -FeatureName Microsoft-Hyper-V-All -Online -ErrorAction SilentlyContinue
+                }
+	        Default { }
         }
-    } else {
-            $state = 'Not Installed'
+
+        If($hyperv){
+            # Check if Hyper-V is already enabled.
+            if($hyperv.State -eq "Enabled") {
+                $state = 'Enabled'
+            } else {
+                $state = 'Disabled'
+            }
+        } else {
+                $state = 'Not Installed'
+        }
+        return $state
     }
-    return $state
+    Else{
+        return 
+    }
 }
 
 

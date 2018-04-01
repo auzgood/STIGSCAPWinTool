@@ -23,49 +23,55 @@ continue as the current user context or enter alternate credentials to use. If a
 the [System.Management.Automation.PSCredential] object is returned by the function.  
 #>  
     [cmdletbinding()]  
-    Param()  
+    Param([Parameter(Mandatory=$false)]
+    [switch]$CheckOnly = $false)  
       
     Write-Verbose "Checking to see if current user context is Administrator"  
     If (-NOT ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator"))  
     {  
-        Write-Warning "You are not currently running this under an Administrator account! `nThere is potential that this command could fail if not running under an Administrator account."  
-        Write-Verbose "Presenting option for user to pick whether to continue as current user or use alternate credentials"  
-        #Determine Values for Choice  
-        $choice = [System.Management.Automation.Host.ChoiceDescription[]] @("Use &Alternate Credentials","&Continue with current Credentials")  
+        If(!$CheckOnly){
+            Write-Warning "You are not currently running this under an Administrator account! `nThere is potential that this command could fail if not running under an Administrator account."  
+            Write-Verbose "Presenting option for user to pick whether to continue as current user or use alternate credentials"  
+            #Determine Values for Choice  
+            $choice = [System.Management.Automation.Host.ChoiceDescription[]] @("Use &Alternate Credentials","&Continue with current Credentials")  
   
-        #Determine Default Selection  
-        [int]$default = 0  
+            #Determine Default Selection  
+            [int]$default = 0  
   
-        #Present choice option to user  
-        $userchoice = $host.ui.PromptforChoice("Warning","Please select to use Alternate Credentials or current credentials to run command",$choice,$default)  
+            #Present choice option to user  
+            $userchoice = $host.ui.PromptforChoice("Warning","Please select to use Alternate Credentials or current credentials to run command",$choice,$default)  
   
-        Write-Debug "Selection: $userchoice"  
+            Write-Debug "Selection: $userchoice"  
   
-        #Determine action to take  
-        Switch ($Userchoice)  
-        {  
-            0  
+            #Determine action to take  
+            Switch ($Userchoice)  
             {  
-                #Prompt for alternate credentials  
-                Write-Verbose "Prompting for Alternate Credentials"  
-                $Credential = Get-Credential
-                Write-Output $Credential    
-            }  
-            1  
-            {  
-                #Continue using current credentials  
-                Write-Verbose "Using current credentials"  
-                $Credential = New-Object psobject -Property @{
-    		    UserName = "$env:USERDNSDOMAIN\$env:USERNAME"
-		}
-		Write-Output $Credential
-            }  
-        }          
-          
+                0  
+                {  
+                    #Prompt for alternate credentials  
+                    Write-Verbose "Prompting for Alternate Credentials"  
+                    $Credential = Get-Credential
+                    Write-Output $Credential    
+                }  
+                1  
+                {  
+                    #Continue using current credentials  
+                    Write-Verbose "Using current credentials"  
+                    $Credential = New-Object psobject -Property @{
+    		        UserName = "$env:USERDNSDOMAIN\$env:USERNAME"
+		    }
+		    Write-Output $Credential
+                }  
+            }
+         }
+         Else{
+            return $false
+         }          
     }  
     Else   
     {  
-        Write-Verbose "Passed Administrator check"  
+        Write-Verbose "Passed Administrator check"
+        return $true 
     }  
 }
 
