@@ -324,7 +324,6 @@ If(($additionalFeatureNames -match "IIS") -and ($envOSRoleType -ne 1)){
     $additionalscripts ++
 }
 
-
 $Pendingreboot = (Get-PendingReboot).RebootPending
 # Launch text
 write-host ""
