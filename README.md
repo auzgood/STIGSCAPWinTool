@@ -1,33 +1,33 @@
-#e Windows STIG & SCAP Toolkit 
+#e Windows STIG & SCAP Toolkit
 
 ## WHAT IS IT: 	
-A Powershell script that will take a GPO backup or SCAP XCCDF file and generate stigs settings
+A PowerShell script that will take a GPO backup or SCAP XCCDF file and generate STIGs settings
 Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Security Compliance Manager Toolkit
 
 ## HOW TO USE IT:
-    Apply-STIGToolAdv.ps1	This is a more dynamic powershell script. This will detect roles, 
-				and features and even software and install the appropiate GPO backup.
-    Apply-SCAPTool.ps1	STILL DEVELOPING: This is the most advanced powershell script. This script will be alot 
-				like linux's OpenSCAP, it will parse the XCCDF file from DISA and build a dataset
+    Apply-STIGToolAdv.ps1	This is a more dynamic PowerShell script. This will detect roles,
+				and features and even software and install the appropriate GPO backup.
+    Apply-SCAPTool.ps1	STILL DEVELOPING: This is the most advanced PowerShell script. This script will be a lot
+				like Linux's OpenSCAP, it will parse the XCCDF file from DISA and build a dataset
 				of all STIG components and one by one it will apply the STIG based on the configuration files.
-    Remove-STIGTool.ps1	This script just removes the the group policy folders and clear the security database.
-						 
+    Remove-STIGTool.ps1	This script just removes the group policy folders and clear the security database.
+
 ## REQUIREMENTS:		
- - Modules need to be downladed. Follow [README.md](Modules/README.md) instructions in modules folder
- - Stig Naming convertions is required for STIG Tools. Follow [README.md](GPO/README.md)  instructions in GPO folder
+ - Modules need to be downloaded. Follow [README.md](Modules/README.md) instructions in modules folder
+ - STIG Naming conventions is required for STIG Tools. Follow [README.md](GPO/README.md)  instructions in GPO folder
  - CCI required for SCAP Tools. Follow [README.md](CCI/README.md)  instructions in CCI folder
  - SCAP Benchmarks required for SCAP Tools. Follow [README.md](SCAP/README.md)  instructions in SCAP folder
  - LGPO executable required for all tools. Follow [README.md](Tools/README.md)  instructions in Tools folder
 
 ## WHAT IT DOES: 	
-   **Apply-STIGToolAdv.ps1**: The script will read into the GPO's backup.xml inside each GUID and identifiy the name of the policy. Using that information it will determine if the name matches identified system information, roles, features and install products and apply them locally using Microsoft's Security Compliance Manager tool LGPO. This ultimately read the GPO settings, and builds a file with all the registry and security settings, then applies those settings within the local gpo. These settings can then be viewed using the systems gpedit.msc. All keys and settings are backedup in the temp folder and logged in log folder. 
+   **Apply-STIGToolAdv.ps1**: The script will read into the GPO's backup.xml inside each GUID and identify the name of the policy. Using that information it will determine if the name matches identified system information, roles, features and install products and apply them locally using Microsoft's Security Compliance Manager tool LGPO. This ultimately read the GPO settings, and builds a file with all the registry and security settings, then applies those settings within the local gpo. These settings can then be viewed using the systems gpedit.msc. All keys and settings are backed up in the temp folder and logged in log folder.
 
 ## FOLDERS:
-			
+
     CCI\U_CCI_List.xml <-- Used with Apply-SCAPTool.ps1. Control Correlation Identifier (CCI) provides a standard identifier and description for each of the singular, actionable statements that comprise an IA control or IA best practice			
-    Configs\	   <-- Used with Apply-SCAPTool.ps1. Configuration files for each STIG ID. These are ini like files with commands for validation and remedation steps.			
-    Extensions\	   <-- Used with Apply-SCAPTool.ps1. Powershell extension folder provides additional PowerShell functions
-    Modules\	   <-- Additional powershell modules found in PowerShell Gallery and elsewhere
+    Configs\	   <-- Used with Apply-SCAPTool.ps1. Configuration files for each STIG ID. These are ini like files with commands for validation and remediation steps.			
+    Extensions\	   <-- Used with Apply-SCAPTool.ps1. PowerShell extension folder provides additional PowerShell functions
+    Modules\	   <-- Additional PowerShell modules found in PowerShell Gallery and elsewhere
     GPO\		   <-- Used with Apply-STIGToolAdv.ps1. Follow README instructions in folder
     Logs\		   <-- Output logs for LGPO and advanced logging (Use CMTRACE)
     SCAP\		   <-- SCAP Benchmark files. Follow README.md instructions in folder
