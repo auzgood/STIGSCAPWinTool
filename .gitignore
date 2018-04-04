@@ -5,4 +5,5 @@
 /SCAP
 /STIGS
 /Temp
-
+/Tools
+!/CCI/README.md
