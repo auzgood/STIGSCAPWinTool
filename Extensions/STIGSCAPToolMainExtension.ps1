@@ -1079,7 +1079,7 @@ Function Build-LGPOTemplate{
     PARAM(
         [Parameter(Mandatory=$true,
                    Position=0)]
-        $Path,
+        $InfPath,
         [Parameter(Mandatory=$true,
                    Position=1)]
         $OutputPath,
@@ -1091,19 +1091,22 @@ Function Build-LGPOTemplate{
 
     Begin
     {
-        If(!(Test-Path $Path)){throw "[$Path] does not exist."}
+        If(!(Test-Path $InfPath)){
+            Write-Log -Message "[$InfPath] not specified or does not exist. Unable to build LGPO Template." -CustomComponent "Template" -ColorLevel 6 -NewLine -HostMsg 
+            exit -1
+        }
         #$lgpoout = $null
-        $lgpoout = "; ----------------------------------------------------------------------`n"
-        $lgpoout += "; PROCESSING POLICY`n"
-        $lgpoout += "; Source file:`n"
-        $lgpoout += "`n"
+        $lgpoout = "; ----------------------------------------------------------------------`r`n"
+        $lgpoout += "; PROCESSING POLICY`r`n"
+        $lgpoout += "; Source file:`r`n"
+        $lgpoout += "`r`n"
     }
 
     Process
     {
-        $GptTmplContent = Split-IniContent -Path $Path
+        $GptTmplContent = Split-IniContent -Path $InfPath
         If (($GptTmplContent.Section -eq 'Registry Values').count -gt 0){
-            Write-host "'Registry Values' section found in [$Path], building list...." -ForegroundColor Cyan
+            Write-Log -Message "'Registry Values' section found in [$InfPath], building template..." -CustomComponent "Template" -ColorLevel 6 -HostMsg 
 
             $RegValueList = $GptTmplContent | Where {$_.section -eq 'Registry Values'}
             Foreach ($RegKey in $RegValueList){
@@ -1142,15 +1145,15 @@ Function Build-LGPOTemplate{
                 }
                 #>
                 Write-host "   Adding Registry: $RegProperty\$RegKeyPath\$RegName" -ForegroundColor Gray
-                $lgpoout += "$LGPOHive`n"
-                $lgpoout += "$RegKeyPath`n"
-                $lgpoout += "$RegName`n"
-                $lgpoout += "$($RegType):$RegValue`n"
-                $lgpoout += "`n"
+                $lgpoout += "$LGPOHive`r`n"
+                $lgpoout += "$RegKeyPath`r`n"
+                $lgpoout += "$RegName`r`n"
+                $lgpoout += "$($RegType):$RegValue`r`n"
+                $lgpoout += "`r`n"
             }
         }
         Else{
-            Write-host "No Registry Value were found in [$Path], skipping..." -ForegroundColor Gray
+            Write-host "No Registry Value were found in [$InfPath], skipping..." -ForegroundColor Gray
         }
     }
     End {
@@ -1167,7 +1170,7 @@ Function Build-SeceditFile{
     PARAM(
         [Parameter(Mandatory=$true,
                    Position=0)]
-        $GptTmplPath,
+        $InfPath,
         
         [Parameter(Mandatory=$true,
                    Position=1)]
@@ -1183,7 +1186,10 @@ Function Build-SeceditFile{
 
     Begin
     {
-        If(!(Test-Path $Path)){throw "[$Path] does not exist."}
+        If(!(Test-Path $InfPath)){
+            Write-Log -Message "[$InfPath] not specified or does not exist. Unable to build LGPO Template." -CustomComponent "Template" -ColorLevel 6 -NewLine -HostMsg 
+            exit -1
+        }
         $backupSeceditFile = $env:ComputerName + ".seceditbackup.inf"
         If ($LogFolderPath){
             $SeceditResults = secedit /export /cfg "$WorkingPath\$backupSeceditFile" /log "$LogFolderPath\$backupSeceditFile.log"
@@ -1194,14 +1200,14 @@ Function Build-SeceditFile{
 
         #generate start of file
         #$secedit = $null
-        $secedit =  "[Unicode]`n"
-        $secedit += "Unicode=yes`n"
-        $secedit += "[Version]`n"
-        $secedit += "signature=`"`$CHICAGO`$`"`n"
-        $secedit += "Revision=1`n"
+        $secedit =  "[Unicode]`r`n"
+        $secedit += "Unicode=yes`r`n"
+        $secedit += "[Version]`r`n"
+        $secedit += "signature=`"`$CHICAGO`$`"`r`n"
+        $secedit += "Revision=1`r`n"
 
         #build array with content
-        $GptTmplContent = Split-IniContent -Path $GptTmplPath
+        $GptTmplContent = Split-IniContent -Path $InfPath
 
     }
 
@@ -1210,8 +1216,8 @@ Function Build-SeceditFile{
         #get system access section
         If (($GptTmplContent.Section -eq 'System Access').count -gt 0){
             $SystemAccessFound = $true
-            Write-host "'System Access' section found in [$GptTmplPath], building list...." -ForegroundColor Cyan
-            $secedit += "[System Access]`n"
+            Write-host "'System Access' section found in [$InfPath], building list...." -ForegroundColor Cyan
+            $secedit += "[System Access]`r`n"
 
             $AccessValueList = $GptTmplContent | Where {$_.section -eq 'System Access'}
             Foreach ($AccessKey in $AccessValueList){
@@ -1223,13 +1229,13 @@ Function Build-SeceditFile{
                 If ($AccessName -eq "NewGuestName"){
                     $AccessValue = $AccessValue -replace $AccessKey.Value, "$Global:NewGuestName"
                 }
-                $secedit += "$AccessName = $AccessValue`n"
+                $secedit += "$AccessName = $AccessValue`r`n"
                 #$secedit += "$PrivilegeValue" 
             }
         }
         Else{
             $SystemAccessFound = $false
-            Write-host "No System Access were found in [$Path], skipping..." -ForegroundColor Gray
+            Write-host "No System Access were found in [$InfPath], skipping..." -ForegroundColor Gray
         }
 
         
@@ -1237,8 +1243,8 @@ Function Build-SeceditFile{
         #next get Privilege Rights section
         If (($GptTmplContent.Section -eq 'Privilege Rights').count -gt 0){
             $PrivilegeRightsFound = $true
-            Write-host "'Privilege Rights' section found in [$GptTmplPath], building list...." -ForegroundColor Cyan
-            $secedit += "[Privilege Rights]`n"
+            Write-host "'Privilege Rights' section found in [$InfPath], building list...." -ForegroundColor Cyan
+            $secedit += "[Privilege Rights]`r`n"
 
             $PrivilegeValueList = $GptTmplContent | Where {$_.section -eq 'Privilege Rights'}
             Foreach ($PrivilegeKey in $PrivilegeValueList){
@@ -1265,13 +1271,13 @@ Function Build-SeceditFile{
                 $PrivilegeValue = $($temp | Get-Unique) -join "," 
 
 
-                $secedit += "$PrivilegeName = $PrivilegeValue`n"
+                $secedit += "$PrivilegeName = $PrivilegeValue`r`n"
                 #$secedit += "$PrivilegeValue" 
             }
         }
         Else{
             $PrivilegeRightsFound = $false
-            Write-host "No Privilege Rights were found in [$Path], skipping..." -ForegroundColor Gray
+            Write-host "No Privilege Rights were found in [$InfPath], skipping..." -ForegroundColor Gray
         }
 
     }

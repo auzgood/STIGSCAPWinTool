@@ -213,6 +213,8 @@ $additionalscripts = 0
 $appliedPolicies = 0
 $errorPolicies = 0
 $applyProgess = 1
+$successcnt = 0
+$failedcnt = 0
 #applying GPO to Proper OS in order
 Foreach ($GPO in $GPOs | Sort-Object Order){
     #run first
@@ -224,6 +226,7 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
         4 {$orderLabel = "as fourth group"}
     }
     
+    $relativeGPOpath = ($GPO.Path).TrimStart("$BackupGPOPath")
     Write-Progress -Activity "Applying policy $($GPO.name)" -Status "Policy $applyProgess of $($GPOs.Count)" -PercentComplete (($applyProgess / $GPOs.Count) * 100)
 
     If($GPO.Order -ne 0){
@@ -238,55 +241,103 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
 
             $env:SEE_MASK_NOZONECHECKS = 1
             If(Test-Path $GptTmplPath){
-                Build-LGPOTemplate -Path $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)"
-                Start-Sleep 10
-                Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/t ""$workingTempPath\$($GPO.name).lgpo""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).lgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).lgpo.stderr" -Wait -NoNewWindow
-            
+                #parses the GptTmpl.inf for registry values and builds a text file for LGPO to run later
 
-                Build-SeceditFile -GptTmplPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)" -LogFolderPath $workingLogPath
-                Start-Sleep 10
+                Build-LGPOTemplate -InfPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)"
+                 Write-Log -Message "RUNNING COMMAND: '\Tools\LGPO.exe' /t '$workingTempPath\$($GPO.name).lgpo'" -CustomComponent "Command" -ColorLevel 8 -NewLine None -HostMsg
+                $result = Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/t ""$workingTempPath\$($GPO.name).lgpo""" -RedirectStandardError "$workingLogPath\$($GPO.name).lgpo.stderr.log" -Wait -NoNewWindow -PassThru
+                If($result.ExitCode -eq 0){
+                    Write-Log -Message "LGPO command succesfully ran. View [$workingLogPath\$($GPO.name).lgpo.stderr.log] for details" -CustomComponent "LGPO" -ColorLevel 5 -NewLine None -HostMsg
+                    $successcnt ++
+                }
+                Else{
+                    #Import failed for some reason
+                    Write-Log -Message "LGPO command failed. View [$workingLogPath\$($GPO.name).lgpo.stderr.log] for details" -CustomComponent "LGPO" -ColorLevel 3 -NewLine None -HostMsg 
+                    $failedcnt ++
+                }
+
+                Build-SeceditFile -InfPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)" -LogFolderPath $workingLogPath
+                 Write-Log -Message "RUNNING COMMAND: SECEDIT /configure /db secedit.sdb /cfg '$workingTempPath\$($GPO.name).seceditapply.inf' /quiet" -CustomComponent "Command" -ColorLevel 8 -NewLine None -HostMsg
+                #Start-Process SECEDIT -ArgumentList " /configure /db secedit.sdb /cfg ""$workingTempPath\$($GPO.name).seceditapply.inf"" /quiet" -RedirectStandardOutput "$workingLogPath\$($GPO.name).secedit.stdout.log" -RedirectStandardError "$workingLogPath\$($GPO.name).secedit.stderr.log" -Wait -NoNewWindow
                 $SeceditApplyResults = SECEDIT /configure /db secedit.sdb /cfg "$workingTempPath\$($GPO.name).seceditapply.inf"
 
                 #Verify that update was successful (string reading, blegh.)
                 if($SeceditApplyResults[$SeceditApplyResults.Count-2] -eq "The task has completed successfully."){
-                    $appliedPolicies ++
+                    Write-Log -Message "Command ran successfully. See log [%windir%\security\logs\scesrv.log] for detail info" -CustomComponent "LocalPol" -ColorLevel 5 -NewLine None -HostMsg
+                    $successcnt ++
                 }
                 Else{
                     #Import failed for some reason
-                    Write-Log -Message "The import from [$workingTempPath\$($GPO.name).seceditapply.inf] using secedit failed. Full Text Below: $SeceditApplyResults" -CustomComponent "SECEDIT" -ColorLevel 7 -NewLine None -HostMsg 
-                    $errorPolicies ++
+                    $SeceditApplyResults | Out-File "$workingLogPath\$($GPO.name).secedit.log"
+                    Write-Log -Message "The import from [$workingTempPath\$($GPO.name).seceditapply.inf] using secedit failed. Full Text Below: $SeceditApplyResults" -CustomComponent "SECEDIT" -ColorLevel 3 -NewLine None -HostMsg 
+                    $failedcnt ++
                 }
-
-                # Command Example: SECEDIT.EXE /configure /db secedit.sdb /cfg [path]\GptTmpl.inf /log [path]\GptTmpl.log
-                #Start-Process SECEDIT.EXE -ArgumentList "/configure /db secedit.sdb /cfg ""$GptTmplPath"" /log $workingLogPath\GptTmpl.log" -RedirectStandardOutput "$workingTempPath\$($GPO.name).secedit.stdout" -Wait -NoNewWindow
-                #parses the GptTmpl.inf for registry values and builds a text file for LGPO to run later
-
             }
         
             If(Test-Path $MachineRegPOLPath){
                 # Command Example: LocalPol.exe -m -v -f [path]\registry.pol
-                Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-m -v -f ""$MachineRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.machine.stdout" -Wait -NoNewWindow
+                 Write-Log -Message "RUNNING COMMAND: '\Tools\LocalGPO\Security Templates\LocalPol.exe' -m -v -f '$MachineRegPOLPath'" -CustomComponent "Command" -ColorLevel 8 -NewLine None -HostMsg
+                $result = Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-m -v -f ""$MachineRegPOLPath""" -RedirectStandardOutput "$workingLogPath\$($GPO.name).localpol.machine.stdout.log" -Wait -NoNewWindow -PassThru
+                If($result.ExitCode -eq 0){
+                    Write-Log -Message "Command ran successfully. See log [$workingLogPath\$($GPO.name).localpol.machine.stdout.log] for detail info" -CustomComponent "LocalPol" -ColorLevel 5 -NewLine None -HostMsg
+                    $successcnt ++
+                }
+                Else{
+                    #Import failed for some reason
+                    Write-Log -Message "Command failed to run. See log [$workingLogPath\$($GPO.name).localpol.machine.stdout.log] for detail info" -CustomComponent "LocalPol" -ColorLevel 3 -NewLine None -HostMsg 
+                    $failedcnt ++
+                }
             }
 
             If(Test-Path $UserRegPOLPath){
                 # Command Example: LocalPol.EXE -u -v -f [path]\registry.pol
-                Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-u -v -f ""$UserRegPOLPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).localpol.user.stdout" -Wait -NoNewWindow
+                 Write-Log -Message "RUNNING COMMAND: '\Tools\LocalGPO\Security Templates\LocalPol.exe' -u -v -f '$MachineRegPOLPath'" -CustomComponent "Command" -ColorLevel 8 -NewLine None -HostMsg
+                $result = Start-Process "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe" -ArgumentList "-u -v -f ""$UserRegPOLPath""" -RedirectStandardOutput "$workingLogPath\$($GPO.name).localpol.user.stdout.log" -Wait -NoNewWindow -PassThru
+                If($result.ExitCode -eq 0){
+                    Write-Log -Message "Command ran successfully. See log [$workingLogPath\$($GPO.name).localpol.user.stdout.log] for detail info" -CustomComponent "LocalPol" -ColorLevel 5 -NewLine None -HostMsg
+                    $successcnt ++
+                }
+                Else{
+                    #Import failed for some reason
+                    Write-Log -Message "Command failed to run. See log [$workingLogPath\$($GPO.name).localpol.user.stdout.log] for detail info" -CustomComponent "LocalPol" -ColorLevel 3 -NewLine None -HostMsg 
+                    $failedcnt ++
+                }
             }
 
             If(Test-Path $AuditCsvPath){
                 # Command Example: AUDITPOL /restore /file:[path]\Audit.csv    
-                Start-Process AUDITPOL.EXE -ArgumentList "/restore /file:""$AuditCsvPath""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).auditpol.stdout" -Wait -NoNewWindow
+                 Write-Log -Message "RUNNING COMMAND: AUDITPOL.EXE /restore /file:'$AuditCsvPath'" -CustomComponent "Command" -ColorLevel 8 -NewLine None -HostMsg
+                $result = Start-Process AUDITPOL.EXE -ArgumentList "/restore /file:""$AuditCsvPath""" -RedirectStandardOutput "$workingLogPath\$($GPO.name).auditpol.stdout.log" -Wait -NoNewWindow -PassThru
+                If($result.ExitCode -eq 0){
+                    Write-Log -Message "Command ran successfully. See log [$workingLogPath\$($GPO.name).auditpol.stdout.log] for detail info" -CustomComponent "AUDITPOL" -ColorLevel 5 -NewLine None -HostMsg
+                    $successcnt ++
+                }
+                Else{
+                    #Import failed for some reason
+                    Write-Log -Message "Command failed to run. See log [$workingLogPath\$($GPO.name).auditpol.stdout.log] for detail info" -CustomComponent "AUDITPOL" -ColorLevel 3 -NewLine None -HostMsg 
+                    $failedcnt ++
+                }
             }
+
+
+            #build collective counter status
+            If ($failedcnt -gt 0){
+                $errorPolicies ++
+            }
+            Else{
+                $appliedPolicies ++
+            }
+
         }
         ElseIf(Test-Path "$ToolsPath\LGPO.exe"){
-            Write-Log -Message "    RUNNING COMMAND: ""$ToolsPath\LGPO.exe"" /q /v /g ""$($GPO.Path)"" >> ""$workingTempPath\$($GPO.name).stdout""" -CustomComponent "LGPO" -ColorLevel 1 -NewLine None -HostMsg 
             Try{
                 #Start-Process "$env:windir\system32\cscript.exe" -ArgumentList "//NOLOGO ""$ToolsPath\LocalGPO\LocalGPO.wsf"" /Path:""$($GPO.Path)"" /Validate /NoOverwrite" -RedirectStandardOutput "$workingTempPath\$($GPO.name).gpo.log" -Wait -NoNewWindow
-                Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/q /v /g ""$($GPO.Path)""" -RedirectStandardOutput "$workingTempPath\$($GPO.name).allgpo.stdout" -RedirectStandardError "$workingTempPath\$($GPO.name).allgpo.stderr" -Wait -NoNewWindow
+                 Write-Log -Message "    RUNNING COMMAND: '\Tools\LGPO.exe' /q /v /g '$($GPO.Path)' >> '$workingLogPath\$($GPO.name).stdout.log'" -CustomComponent "Command" -ColorLevel 1 -NewLine None -HostMsg 
+                Start-Process "$ToolsPath\LGPO.exe" -ArgumentList "/q /v /g ""$($GPO.Path)""" -RedirectStandardOutput "$workingLogPath\$($GPO.name).allgpo.stdout.log" -RedirectStandardError "$workingLogPath\$($GPO.name).allgpo.stderr.log" -Wait -NoNewWindow -PassThru
                 $appliedPolicies ++
             }
             Catch{
-                Write-Log -Message "Unable to Apply [$($GPO.name)] policy, see [$workingTempPath\$($GPO.name)_lgpo.stderr] for details" -CustomComponent "LGPO" -ColorLevel 2 -NewLine None -HostMsg 
+                Write-Log -Message "Unable to Apply [$($GPO.name)] policy, see [$workingTempPath\$($GPO.name)_lgpo.stderr.log] for details" -CustomComponent "LGPO" -ColorLevel 2 -NewLine None -HostMsg 
                 $errorPolicies ++
             }
         }
@@ -297,10 +348,14 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
         $env:SEE_MASK_NOZONECHECKS = 0
     }
     Else{
-        Write-Log -Message "Ignoring [$($GPO.name)] from [$($GPO.Path)] because it's [$orderLabel]..." -CustomComponent $orderLabel -ColorLevel 8 -NewLine None -HostMsg 
+        Write-Log -Message "Ignoring [$($GPO.name)] from [$relativeGPOpath] because it's [$orderLabel]..." -CustomComponent $orderLabel -ColorLevel 8 -NewLine None -HostMsg 
     }
     $applyProgess++
 }
+
+
+
+
 
 Write-Log -Message "Determining if additonal configuration needs to be done." -CustomComponent "Modules" -ColorLevel 4 -NewLine Before -HostMsg 
 
