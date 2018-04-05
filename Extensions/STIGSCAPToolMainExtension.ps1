@@ -1267,7 +1267,7 @@ Function Build-SeceditFile{
                 $PrivilegeName = $PrivilegeKey.Name
                 $PrivilegeValue = $PrivilegeKey.Value
 
-                If ($PrivilegeValue -match "ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS|S-1-5-21-*"){
+                If ($PrivilegeValue -match "ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS|S-1-5-21"){
                        
                     If($IsMachinePartOfDomain){
                         $EA_SID = Get-UserToSid -Domain $envMachineDNSDomain -User "Enterprise Admins"
@@ -1279,9 +1279,8 @@ Function Build-SeceditFile{
                         $ADMIN_SID = Get-UserToSid -LocalAccount 'Administrators'
                         $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR ENTERPRISE ADMINS",$ADMIN_SID
                         $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR DOMAIN ADMINS",$ADMIN_SID
-                        $PrivilegeValue = $PrivilegeValue -replace "S-1-5-21-*",$ADMIN_SID
+                        $PrivilegeValue = $PrivilegeValue -replace "S-1-5-21-[0-9-]+",$ADMIN_SID
                     }
-                                                    
                 }
                 #split up values, get only unique values and make it a comma deliminated list again
                 $temp = $PrivilegeValue -split ","
