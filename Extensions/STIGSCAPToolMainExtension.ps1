@@ -1208,6 +1208,7 @@ Function Build-SeceditFile{
             #build array with content
             $GptTmplContent = Split-IniContent -Path $InfPath
         }
+
         $backupSeceditFile = "secedit.backup.sdb"
         If(!(Test-Path "$OutputPath\$backupSeceditFile")){
             If ($LogFolderPath){
@@ -1217,88 +1218,94 @@ Function Build-SeceditFile{
                 $SeceditResults = secedit /export /cfg "$OutputPath\$backupSeceditFile"
             }
         }
-
-        #generate start of file
-        #$secedit = $null
-        $secedit =  "[Unicode]`r`n"
-        $secedit += "Unicode=yes`r`n"
-        $secedit += "[Version]`r`n"
-        $secedit += "signature=`"`$CHICAGO`$`"`r`n"
-        $secedit += "Revision=1`r`n"
     }
 
     Process
-    {
-        #get system access section
-        If (($GptTmplContent.Section -eq 'System Access').count -gt 0){
-            $SystemAccessFound = $true
-            Write-host "'System Access' section found in [$InfPath], building list...." -ForegroundColor Cyan
-            $secedit += "[System Access]`r`n"
+    {       
+        $secedit = $null
+        $continue = $false
+        If ( (($GptTmplContent.Section -eq 'System Access').count -gt 0) -or (($GptTmplContent.Section -eq 'Privilege Rights').count -gt 0) ){
+            $continue = $true
+        }
+        If($continue){
+            #generate start of file
+            $secedit =  "[Unicode]`r`n"
+            $secedit += "Unicode=yes`r`n"
+            $secedit += "[Version]`r`n"
+            $secedit += "signature=`"`$CHICAGO`$`"`r`n"
+            $secedit += "Revision=1`r`n"
+        
+            #get system access section
+            If (($GptTmplContent.Section -eq 'System Access').count -gt 0){
+                $SystemAccessFound = $true
+                Write-host "'System Access' section found in [$InfPath], building list...." -ForegroundColor Cyan
+                $secedit += "[System Access]`r`n"
 
-            $AccessValueList = $GptTmplContent | Where {$_.section -eq 'System Access'}
-            Foreach ($AccessKey in $AccessValueList){
-                $AccessName = $AccessKey.Name
-                $AccessValue = $AccessKey.Value
-                If ($AccessName -eq "NewAdministratorName"){
-                    $AccessValue = $AccessValue -replace $AccessKey.Value, "$Global:NewAdministratorName"
+                $AccessValueList = $GptTmplContent | Where {$_.section -eq 'System Access'}
+                Foreach ($AccessKey in $AccessValueList){
+                    $AccessName = $AccessKey.Name
+                    $AccessValue = $AccessKey.Value
+                    If ($AccessName -eq "NewAdministratorName"){
+                        $AccessValue = $AccessValue -replace $AccessKey.Value, "$Global:NewAdministratorName"
+                    }
+                    If ($AccessName -eq "NewGuestName"){
+                        $AccessValue = $AccessValue -replace $AccessKey.Value, "$Global:NewGuestName"
+                    }
+                    $secedit += "$AccessName = $AccessValue`r`n"
+                    #$secedit += "$PrivilegeValue" 
                 }
-                If ($AccessName -eq "NewGuestName"){
-                    $AccessValue = $AccessValue -replace $AccessKey.Value, "$Global:NewGuestName"
-                }
-                $secedit += "$AccessName = $AccessValue`r`n"
-                #$secedit += "$PrivilegeValue" 
             }
-        }
-        Else{
-            $SystemAccessFound = $false
-            Write-host "No System Access were found in [$InfPath], skipping..." -ForegroundColor Gray
-        }
-
+            Else{
+                $SystemAccessFound = $false
+                Write-host "No System Access were found in [$InfPath], skipping..." -ForegroundColor Gray
+            }
         
-        
-        #next get Privilege Rights section
-        If (($GptTmplContent.Section -eq 'Privilege Rights').count -gt 0){
-            $PrivilegeRightsFound = $true
-            Write-host "'Privilege Rights' section found in [$InfPath], building list...." -ForegroundColor Cyan
-            $secedit += "[Privilege Rights]`r`n"
+            #next get Privilege Rights section
+            If (($GptTmplContent.Section -eq 'Privilege Rights').count -gt 0){
+                $PrivilegeRightsFound = $true
+                Write-host "'Privilege Rights' section found in [$InfPath], building list...." -ForegroundColor Cyan
+                $secedit += "[Privilege Rights]`r`n"
 
-            $PrivilegeValueList = $GptTmplContent | Where {$_.section -eq 'Privilege Rights'}
-            Foreach ($PrivilegeKey in $PrivilegeValueList){
-                $PrivilegeName = $PrivilegeKey.Name
-                $PrivilegeValue = $PrivilegeKey.Value
+                $PrivilegeValueList = $GptTmplContent | Where {$_.section -eq 'Privilege Rights'}
+                Foreach ($PrivilegeKey in $PrivilegeValueList){
+                    $PrivilegeName = $PrivilegeKey.Name
+                    $PrivilegeValue = $PrivilegeKey.Value
 
-                If ($PrivilegeValue -match "ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS|S-1-5-21"){
+                    If ($PrivilegeValue -match "ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS|S-1-5-21"){
                        
-                    If($IsMachinePartOfDomain){
-                        $EA_SID = Get-UserToSid -Domain $envMachineDNSDomain -User "Enterprise Admins"
-                        $DA_SID = Get-UserToSid -Domain $envMachineDNSDomain -User "Domain Admins"
-                        $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR ENTERPRISE ADMINS",$EA_SID
-                        $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR DOMAIN ADMINS",$DA_SID
+                        If($IsMachinePartOfDomain){
+                            $EA_SID = Get-UserToSid -Domain $envMachineDNSDomain -User "Enterprise Admins"
+                            $DA_SID = Get-UserToSid -Domain $envMachineDNSDomain -User "Domain Admins"
+                            $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR ENTERPRISE ADMINS",$EA_SID
+                            $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR DOMAIN ADMINS",$DA_SID
+                        }
+                        Else{
+                            $ADMIN_SID = Get-UserToSid -LocalAccount 'Administrators'
+                            $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR ENTERPRISE ADMINS",$ADMIN_SID
+                            $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR DOMAIN ADMINS",$ADMIN_SID
+                            $PrivilegeValue = $PrivilegeValue -replace "S-1-5-21-[0-9-]+",$ADMIN_SID
+                        }
                     }
-                    Else{
-                        $ADMIN_SID = Get-UserToSid -LocalAccount 'Administrators'
-                        $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR ENTERPRISE ADMINS",$ADMIN_SID
-                        $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR DOMAIN ADMINS",$ADMIN_SID
-                        $PrivilegeValue = $PrivilegeValue -replace "S-1-5-21-[0-9-]+",$ADMIN_SID
-                    }
+                    #split up values, get only unique values and make it a comma deliminated list again
+                    $temp = $PrivilegeValue -split ","
+                    $PrivilegeValue = $($temp | Get-Unique) -join "," 
+
+
+                    $secedit += "$PrivilegeName = $PrivilegeValue`r`n"
+                    #$secedit += "$PrivilegeValue" 
                 }
-                #split up values, get only unique values and make it a comma deliminated list again
-                $temp = $PrivilegeValue -split ","
-                $PrivilegeValue = $($temp | Get-Unique) -join "," 
-
-
-                $secedit += "$PrivilegeName = $PrivilegeValue`r`n"
-                #$secedit += "$PrivilegeValue" 
             }
-        }
-        Else{
-            $PrivilegeRightsFound = $false
-            Write-host "No Privilege Rights were found in [$InfPath], skipping..." -ForegroundColor Gray
+            Else{
+                $PrivilegeRightsFound = $false
+                Write-host "No Privilege Rights were found in [$InfPath], skipping..." -ForegroundColor Gray
+            }
         }
 
     }
     End {
-        Write-host "Saved file to [$OutputPath\$OutputName]" -ForegroundColor Gray
-        $secedit | Out-File "$OutputPath\$OutputName" -Force
+        If($secedit){
+            $secedit | Out-File "$OutputPath\$OutputName" -Force
+            Write-host "Saved file to [$OutputPath\$OutputName]" -ForegroundColor Gray
+        }
     }
 }
