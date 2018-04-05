@@ -78,7 +78,7 @@ Function Write-Log {
     param (
         [Parameter(Mandatory = $true)]
         [string]$Message,
-        
+        $Output,
         [string]$CustomComponent,
 
         [Parameter()]
@@ -134,21 +134,36 @@ Function Write-Log {
             Else{
                 $FullMessage = $Message
             }
-        
+            
+            $bgcolor = $null
             Switch ($ColorLevel)
             {
-                0 {Write-Host $FullMessage -ForegroundColor White}
-                1 {Write-Host $FullMessage -ForegroundColor Gray}
-                2 {Write-Host $FullMessage -ForegroundColor Yellow}
-                3 {Write-Host $FullMessage -ForegroundColor White -BackgroundColor Red}
-                4 {Write-Host $FullMessage -ForegroundColor Cyan}
-                5 {Write-Host $FullMessage -ForegroundColor Green}
-                6 {Write-Warning $Message}
-                7 {Write-Error $Message}
-                8 {Write-Host $FullMessage -ForegroundColor DarkYellow}
-                9 {Write-Host $FullMessage -ForegroundColor Magenta}
-                default {Write-Host $FullMessage}
+                0 {$fgcolor = 'White';Write-Host $FullMessage -ForegroundColor $fgcolor}
+                1 {$fgcolor = 'Gray';Write-Host $FullMessage -ForegroundColor $fgcolor}
+                2 {$fgcolor = 'Yellow';Write-Host $FullMessage -ForegroundColor $fgcolor}
+                3 {$fgcolor = 'White';$bgcolor = 'Red';Write-Host $FullMessage -ForegroundColor $fgcolor -BackgroundColor $bgcolor}
+                4 {$fgcolor = 'Cyan';Write-Host $FullMessage -ForegroundColor $fgcolor}
+                5 {$fgcolor = 'Green';Write-Host $FullMessage -ForegroundColor $fgcolor}
+                6 {$fgcolor = 'Orange';Write-Warning $Message}
+                7 {$fgcolor = 'Red';Write-Error $Message}
+                8 {$fgcolor = 'DarkYellow';Write-Host $FullMessage -ForegroundColor $fgcolor}
+                9 {$fgcolor = 'Magenta';Write-Host $FullMessage -ForegroundColor $fgcolor}
+                default {$fgcolor = 'White';Write-Host $FullMessage}
             }
+
+            If($output){
+                #save current color
+                $fg = $host.UI.RawUI.ForegroundColor
+                $bg = $host.UI.RawUI.BackgroundColor
+                #set color
+                $host.UI.RawUI.ForegroundColor = $fgcolor
+                $host.UI.RawUI.BackgroundColor = $bgcolor
+                Write-output $Output
+                #reset color
+                $host.UI.RawUI.ForegroundColor = $fg
+                $host.UI.RawUI.BackgroundColor = $bg
+
+            }
         }
     }
 }
@@ -938,7 +953,7 @@ Function Get-UserToSid{
 }
 
 
-Function Sid-toUser($sidString)
+Function Get-SidtoUser($sidString)
 {
  $sid = new-object System.Security.Principal.SecurityIdentifier($sidString)
  $user = $sid.Translate([System.Security.Principal.NTAccount])
@@ -1132,7 +1147,7 @@ Function Build-LGPOTemplate{
                     4 {$RegType = 'DWORD'}
                     5 {$RegType = 'DWORD_BIG_ENDIAN'}
                     6 {$RegType = 'LINK'}
-                    7 {$RegType = 'MULTI_SZ'}
+                    7 {$RegType = 'SZ'}
                 }
 
                 <#
@@ -1189,13 +1204,18 @@ Function Build-SeceditFile{
         If(!(Test-Path $InfPath)){
             Write-Log -Message "[$InfPath] not specified or does not exist. Unable to build LGPO Template." -CustomComponent "Template" -ColorLevel 6 -NewLine -HostMsg 
             exit -1
+        }Else{
+            #build array with content
+            $GptTmplContent = Split-IniContent -Path $InfPath
         }
-        $backupSeceditFile = $env:ComputerName + ".seceditbackup.inf"
-        If ($LogFolderPath){
-            $SeceditResults = secedit /export /cfg "$WorkingPath\$backupSeceditFile" /log "$LogFolderPath\$backupSeceditFile.log"
-        }
-        Else{
-            $SeceditResults = secedit /export /cfg "$WorkingPath\$backupSeceditFile"
+        $backupSeceditFile = "secedit.backup.sdb"
+        If(!(Test-Path "$OutputPath\$backupSeceditFile")){
+            If ($LogFolderPath){
+                $SeceditResults = secedit /export /cfg "$OutputPath\$backupSeceditFile" /log "$LogFolderPath\$backupSeceditFile.log"
+            }
+            Else{
+                $SeceditResults = secedit /export /cfg "$OutputPath\$backupSeceditFile"
+            }
         }
 
         #generate start of file
@@ -1205,10 +1225,6 @@ Function Build-SeceditFile{
         $secedit += "[Version]`r`n"
         $secedit += "signature=`"`$CHICAGO`$`"`r`n"
         $secedit += "Revision=1`r`n"
-
-        #build array with content
-        $GptTmplContent = Split-IniContent -Path $InfPath
-
     }
 
     Process
@@ -1251,7 +1267,7 @@ Function Build-SeceditFile{
                 $PrivilegeName = $PrivilegeKey.Name
                 $PrivilegeValue = $PrivilegeKey.Value
 
-                If ($PrivilegeValue -match "ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS"){
+                If ($PrivilegeValue -match "ADD YOUR ENTERPRISE ADMINS|ADD YOUR DOMAIN ADMINS|S-1-5-21-*"){
                        
                     If($IsMachinePartOfDomain){
                         $EA_SID = Get-UserToSid -Domain $envMachineDNSDomain -User "Enterprise Admins"
@@ -1263,6 +1279,7 @@ Function Build-SeceditFile{
                         $ADMIN_SID = Get-UserToSid -LocalAccount 'Administrators'
                         $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR ENTERPRISE ADMINS",$ADMIN_SID
                         $PrivilegeValue = $PrivilegeValue -replace "ADD YOUR DOMAIN ADMINS",$ADMIN_SID
+                        $PrivilegeValue = $PrivilegeValue -replace "S-1-5-21-*",$ADMIN_SID
                     }
                                                     
                 }
@@ -1282,7 +1299,7 @@ Function Build-SeceditFile{
 
     }
     End {
-        Write-host "Saved file to [$OutputPath\$OutputName.seceditapply.inf]" -ForegroundColor Gray
-        $secedit | Out-File "$OutputPath\$OutputName.seceditapply.inf" -Force
+        Write-host "Saved file to [$OutputPath\$OutputName]" -ForegroundColor Gray
+        $secedit | Out-File "$OutputPath\$OutputName" -Force
     }
 }

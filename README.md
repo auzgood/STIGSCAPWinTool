@@ -44,3 +44,4 @@ Then apply them to a Windows OS using Microsoft's LGPO.exe tool from their Secur
 - https://blogs.technet.microsoft.com/matt_hinsons_manageability_blog/2016/01/29/gpo-packs-in-mdt-2013-u1-for-windows-10/
 - https://www.microsoft.com/en-us/download/confirmation.aspx?id=55319
 - https://github.com/search?l=PowerShell&q=STIG&type=Repositories&utf8=%E2%9C%93
+- https://github.com/mwrlabs/gists/blob/master/PowerView-with-RemoteAccessPolicyEnumeration.ps1

@@ -55,6 +55,9 @@ $localPolExePath = "$ToolsPath\LocalGPO\Security Templates\LocalPol.exe"
 [string]$workingTempPath = Join-Path -Path $TempPath -ChildPath $env:COMPUTERNAME
     New-Item $workingTempPath -ItemType Directory -ErrorAction SilentlyContinue | Out-Null
 
+Write-Host $workingLogPath
+Write-Host $workingTempPath
+
 ## Dot source the required Functions
 Try {
 	[string]$moduleToolkitMain = "$ExtensionsPath\STIGSCAPToolMainExtension.ps1"
@@ -215,6 +218,7 @@ $errorPolicies = 0
 $applyProgess = 1
 $successcnt = 0
 $failedcnt = 0
+$seceditrun = 1
 #applying GPO to Proper OS in order
 Foreach ($GPO in $GPOs | Sort-Object Order){
     #run first
@@ -256,20 +260,22 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
                     $failedcnt ++
                 }
 
-                Build-SeceditFile -InfPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name)" -LogFolderPath $workingLogPath
-                 Write-Log -Message "RUNNING COMMAND: SECEDIT /configure /db secedit.sdb /cfg '$workingTempPath\$($GPO.name).seceditapply.inf' /quiet" -CustomComponent "Command" -ColorLevel 8 -NewLine None -HostMsg
-                #Start-Process SECEDIT -ArgumentList " /configure /db secedit.sdb /cfg ""$workingTempPath\$($GPO.name).seceditapply.inf"" /quiet" -RedirectStandardOutput "$workingLogPath\$($GPO.name).secedit.stdout.log" -RedirectStandardError "$workingLogPath\$($GPO.name).secedit.stderr.log" -Wait -NoNewWindow
-                $SeceditApplyResults = SECEDIT /configure /db secedit.sdb /cfg "$workingTempPath\$($GPO.name).seceditapply.inf"
+                Build-SeceditFile -InfPath $GptTmplPath -OutputPath $workingTempPath -OutputName "$($GPO.name).seceditapply.inf" -LogFolderPath $workingLogPath
+
+                 Write-Log -Message "RUNNING COMMAND: SECEDIT /configure /db secedit.sdb /cfg '$workingTempPath\$($GPO.name).seceditapply.inf' /overwrite /log '$workingLogPath\$($GPO.name).seceditapply.log' /quiet" -CustomComponent "Command" -ColorLevel 8 -NewLine None -HostMsg
+                #Start-Process SECEDIT -ArgumentList " /configure /db secedit.sdb /cfg ""$workingTempPath\$($GPO.name).seceditapply.inf"" /overwrite /quiet" -RedirectStandardOutput "$workingLogPath\$($GPO.name).secedit.stdout.log" -RedirectStandardError "$workingLogPath\$($GPO.name).secedit.stderr.log" -Wait -NoNewWindow
+                $SeceditApplyResults = ECHO y| SECEDIT /configure /db secedit.sdb /cfg "$workingTempPath\$($GPO.name).seceditapply.inf" /overwrite /log "$workingLogPath\$($GPO.name).seceditapply.log"
+                $seceditrun++
 
                 #Verify that update was successful (string reading, blegh.)
                 if($SeceditApplyResults[$SeceditApplyResults.Count-2] -eq "The task has completed successfully."){
-                    Write-Log -Message "Command ran successfully. See log [%windir%\security\logs\scesrv.log] for detail info" -CustomComponent "LocalPol" -ColorLevel 5 -NewLine None -HostMsg
+                    Write-Log -Message "Command ran successfully. See log [$workingLogPath\$($GPO.name).seceditapply.log] for detail info" -CustomComponent "LocalPol" -ColorLevel 5 -NewLine None -HostMsg
                     $successcnt ++
                 }
                 Else{
                     #Import failed for some reason
-                    $SeceditApplyResults | Out-File "$workingLogPath\$($GPO.name).secedit.log"
-                    Write-Log -Message "The import from [$workingTempPath\$($GPO.name).seceditapply.inf] using secedit failed. Full Text Below: $SeceditApplyResults" -CustomComponent "SECEDIT" -ColorLevel 3 -NewLine None -HostMsg 
+                    $SeceditApplyResults | Out-File "$workingLogPath\$($GPO.name).seceditcmd.log"
+                    Write-Log -Message ("The import from [$workingTempPath\$($GPO.name).seceditapply.inf] using secedit failed. Full Text Below:") -Output $SeceditApplyResults -CustomComponent "SECEDIT" -ColorLevel 3 -NewLine None -HostMsg 
                     $failedcnt ++
                 }
             }
@@ -351,9 +357,27 @@ Foreach ($GPO in $GPOs | Sort-Object Order){
         Write-Log -Message "Ignoring [$($GPO.name)] from [$relativeGPOpath] because it's [$orderLabel]..." -CustomComponent $orderLabel -ColorLevel 8 -NewLine None -HostMsg 
     }
     $applyProgess++
+} # end loop
+
+If(Test-Path "$workingTempPath\seceditapply.inf"){
+    Write-Log -Message "RUNNING COMMAND: SECEDIT /configure /db secedit.sdb /cfg '$workingTempPath\seceditapply.inf' /overwrite /quiet" -CustomComponent "Command" -ColorLevel 8 -NewLine None -HostMsg
+    #Start-Process SECEDIT -ArgumentList " /configure /db secedit.sdb /cfg ""$workingTempPath\$($GPO.name).seceditapply.inf"" $appendArg" -RedirectStandardOutput "$workingLogPath\$($GPO.name).secedit.stdout.log" -RedirectStandardError "$workingLogPath\$($GPO.name).secedit.stderr.log" -Wait -NoNewWindow
+    $SeceditApplyResults = SECEDIT /configure /db secedit.sdb /cfg "$workingTempPath\seceditapply.inf" /overwrite
+    Copy-Item "$env:windir\security\logs\scesrv.log" "$workingLogPath\$($GPO.name).scesrv.log" -Force | Out-Null
+    $seceditrun++
+
+    #Verify that update was successful (string reading, blegh.)
+    if($SeceditApplyResults[$SeceditApplyResults.Count-2] -eq "The task has completed successfully."){
+        Write-Log -Message "Command ran successfully. See log [%windir%\security\logs\scesrv.log] for detail info" -CustomComponent "LocalPol" -ColorLevel 5 -NewLine None -HostMsg
+        $successcnt ++
+    }
+    Else{
+        #Import failed for some reason
+        $SeceditApplyResults | Out-File "$workingLogPath\seceditapply.log"
+        Write-Log -Message ("The import from [$workingTempPath\seceditapply.inf] using secedit failed. Full Text Below:") -Output $SeceditApplyResults -CustomComponent "SECEDIT" -ColorLevel 3 -NewLine None -HostMsg 
+        $failedcnt ++
+    }
 }
-
-
 
 
 
