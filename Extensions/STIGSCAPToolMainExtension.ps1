@@ -1168,7 +1168,7 @@ Function Build-LGPOTemplate{
             }
         }
         Else{
-            Write-host "No Registry Value were found in [$InfPath], skipping..." -ForegroundColor Gray
+            Write-host "'Registry Value' section was not found in [$InfPath], skipping..." -ForegroundColor Gray
         }
     }
     End {
@@ -1257,7 +1257,7 @@ Function Build-SeceditFile{
             }
             Else{
                 $SystemAccessFound = $false
-                Write-host "No System Access were found in [$InfPath], skipping..." -ForegroundColor Gray
+                Write-host "'System Access' section was not found in [$InfPath], skipping..." -ForegroundColor Gray
             }
         
             #next get Privilege Rights section
@@ -1297,7 +1297,7 @@ Function Build-SeceditFile{
             }
             Else{
                 $PrivilegeRightsFound = $false
-                Write-host "No Privilege Rights were found in [$InfPath], skipping..." -ForegroundColor Gray
+                Write-host "'Privilege Rights' was not found in [$InfPath], skipping..." -ForegroundColor Gray
             }
         }
 
